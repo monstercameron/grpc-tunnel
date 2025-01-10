@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+option go_package = "/todos";
+
+// A single Todo item.
+message Todo {
+  string id = 1;    // Unique identifier
+  string text = 2;  // Todo description
+  bool done = 3;    // Completion status
+}
+
+// Create
+message CreateTodoRequest {
+  string text = 1;
+}
+message CreateTodoResponse {
+  Todo todo = 1;
+}
+
+// Read (List)
+message ListTodosRequest {}
+message ListTodosResponse {
+  repeated Todo todos = 1;
+}
+
+// Update
+message UpdateTodoRequest {
+  string id = 1;
+  string text = 2;
+  bool done = 3;
+}
+message UpdateTodoResponse {
+  Todo todo = 1;
+}
+
+// Delete
+message DeleteTodoRequest {
+  string id = 1;
+}
+message DeleteTodoResponse {
+  bool success = 1;
+}
+
+// TodoService definition
+service TodoService {
+  rpc CreateTodo(CreateTodoRequest) returns (CreateTodoResponse);
+  rpc ListTodos(ListTodosRequest) returns (ListTodosResponse);
+  rpc UpdateTodo(UpdateTodoRequest) returns (UpdateTodoResponse);
+  rpc DeleteTodo(DeleteTodoRequest) returns (DeleteTodoResponse);
+}

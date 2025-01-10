@@ -2,16 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>gRPC-over-WebSocket Chat</title>
+  <title>Modern Todo List</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- WASM and JS Scripts -->
   <script src="wasm_exec.js"></script>
   <script defer src="script.js"></script>
 </head>
-<body>
-  <h1>gRPC over WebSocket Chat</h1>
-  <div id="chat">
-    <input type="text" id="input" placeholder="Enter message..." />
-    <button id="sendBtn">Send</button>
+<body class="bg-gradient-to-r from-blue-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
+    <!-- Header -->
+    <h1 class="text-3xl font-bold text-center text-indigo-600 mb-6">Todo List</h1>
+
+    <!-- Add Todo Section -->
+    <div class="mb-6">
+      <label for="todoInput" class="block text-gray-700 font-semibold mb-2">Add a New Todo:</label>
+      <div class="flex">
+        <input
+          id="todoInput"
+          type="text"
+          class="flex-1 border border-gray-300 rounded-l-md p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          placeholder="What needs to be done?"
+        />
+        <button
+          id="addTodoBtn"
+          class="bg-indigo-500 text-white px-4 py-2 rounded-r-md hover:bg-indigo-600 transition-colors duration-200"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+
+    <!-- Todo List -->
+    <ul id="todosList" class="space-y-4">
+      <!-- Todo items will be dynamically inserted here -->
+    </ul>
+
+    <!-- Footer -->
+    <p class="text-center text-gray-500 text-sm mt-6">&copy; 2025 Modern Todo App</p>
   </div>
-  <div id="log"></div>
 </body>
 </html>
