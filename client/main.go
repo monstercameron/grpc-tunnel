@@ -4,122 +4,36 @@ import (
 	"log"
 	"syscall/js"
 
-	"google.golang.org/protobuf/proto"
-
-	"earlcameron.com/todos" // Replace with your actual module path and package
+	"earlcameron.com/grpcws"
+	"earlcameron.com/todos"
 )
 
-var ws js.Value
-
-// Method IDs to match the server's switch-case
-const (
-	methodCreateTodo = 0
-	methodListTodos  = 1
-	methodUpdateTodo = 2
-	methodDeleteTodo = 3
-)
+var ws *grpcws.GRPCWS
 
 func main() {
 	log.Println("WASM: Starting up...")
 
-	// 1. Create a WebSocket connection to the server
-	ws = js.Global().Get("WebSocket").New("ws://localhost:8080/ws")
-	ws.Set("binaryType", "arraybuffer") // Receive binary data
+	// Initialize the GRPCWS package with the WebSocket URL
+	var err error
+	ws, err = grpcws.New("ws://localhost:8080/ws")
+	if err != nil {
+		log.Fatalf("WASM: Failed to initialize GRPCWS: %v\n", err)
+	}
 
-	// 2. Set up WebSocket event handlers
-	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("WASM: WebSocket connected.")
-		// Notify JS that the connection is open
-		js.Global().Call("onWebSocketOpen")
-		return nil
-	}))
+	// Register callbacks for each method ID
+	ws.RegisterCallback(grpcws.MethodCreateTodo, onCreateTodo)
+	ws.RegisterCallback(grpcws.MethodListTodos, onListTodo)
+	ws.RegisterCallback(grpcws.MethodUpdateTodo, onUpdateTodo)
+	ws.RegisterCallback(grpcws.MethodDeleteTodo, onDeleteTodo)
 
-	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("WASM: WebSocket error occurred.")
-		return nil
-	}))
-
-	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("WASM: WebSocket closed.")
-		return nil
-	}))
-
-	ws.Set("onmessage", js.FuncOf(onWebSocketMessage))
-
-	// 3. Expose CRUD functions to JavaScript
+	// Expose CRUD functions to JavaScript
 	js.Global().Set("CreateTodo", js.FuncOf(createTodo))
 	js.Global().Set("ListTodos", js.FuncOf(listTodos))
 	js.Global().Set("UpdateTodo", js.FuncOf(updateTodo))
 	js.Global().Set("DeleteTodo", js.FuncOf(deleteTodo))
 
-	// 4. Keep the WASM module running
+	// Keep the WASM module running
 	select {}
-}
-
-// onWebSocketMessage handles incoming messages from the server
-func onWebSocketMessage(this js.Value, args []js.Value) interface{} {
-	event := args[0]
-	data := event.Get("data")
-
-	// Convert JS ArrayBuffer to Go []byte
-	array := js.Global().Get("Uint8Array").New(data)
-	buf := make([]byte, array.Get("length").Int())
-	js.CopyBytesToGo(buf, array)
-
-	if len(buf) < 1 {
-		log.Println("WASM: Received empty message, ignoring.")
-		return nil
-	}
-
-	methodID := buf[0]
-	payload := buf[1:]
-
-	switch methodID {
-	case methodCreateTodo:
-		var resp todos.CreateTodoResponse
-		if err := proto.Unmarshal(payload, &resp); err != nil {
-			log.Printf("WASM: Failed to unmarshal CreateTodoResponse: %v\n", err)
-			return nil
-		}
-		log.Printf("WASM: Received CreateTodoResponse => ID: %s\n", resp.Todo.Id)
-		// Notify JS to update the UI
-		js.Global().Call("onCreateTodo", resp.Todo.Id, resp.Todo.Text, resp.Todo.Done)
-
-	case methodListTodos:
-		var resp todos.ListTodosResponse
-		if err := proto.Unmarshal(payload, &resp); err != nil {
-			log.Printf("WASM: Failed to unmarshal ListTodosResponse: %v\n", err)
-			return nil
-		}
-		log.Printf("WASM: Received ListTodosResponse => %d todos\n", len(resp.Todos))
-		// Pass each todo to JS to render in the UI
-		for _, t := range resp.Todos {
-			js.Global().Call("onListTodo", t.Id, t.Text, t.Done)
-		}
-
-	case methodUpdateTodo:
-		var resp todos.UpdateTodoResponse
-		if err := proto.Unmarshal(payload, &resp); err != nil {
-			log.Printf("WASM: Failed to unmarshal UpdateTodoResponse: %v\n", err)
-			return nil
-		}
-		log.Printf("WASM: Received UpdateTodoResponse => ID: %s\n", resp.Todo.Id)
-		js.Global().Call("onUpdateTodo", resp.Todo.Id, resp.Todo.Text, resp.Todo.Done)
-
-	case methodDeleteTodo:
-		var resp todos.DeleteTodoResponse
-		if err := proto.Unmarshal(payload, &resp); err != nil {
-			log.Printf("WASM: Failed to unmarshal DeleteTodoResponse: %v\n", err)
-			return nil
-		}
-		log.Printf("WASM: Received DeleteTodoResponse => success: %v\n", resp.Success)
-		js.Global().Call("onDeleteTodo", resp.Success)
-
-	default:
-		log.Printf("WASM: Unknown methodID in response: %d\n", methodID)
-	}
-
-	return nil
 }
 
 // createTodo handles the CreateTodo request from JavaScript
@@ -127,24 +41,10 @@ func createTodo(this js.Value, args []js.Value) interface{} {
 	text := args[0].String()
 	log.Printf("WASM: createTodo called with text=%s\n", text)
 
-	// Build the CreateTodoRequest
 	req := &todos.CreateTodoRequest{Text: text}
-
-	// Marshal the request to Protobuf
-	data, err := proto.Marshal(req)
-	if err != nil {
-		log.Printf("WASM: Failed to marshal CreateTodoRequest: %v\n", err)
-		return nil
+	if err := ws.SendRequest(grpcws.MethodCreateTodo, req); err != nil {
+		log.Printf("WASM: Failed to send CreateTodoRequest: %v\n", err)
 	}
-
-	// Prepend method ID
-	finalMsg := append([]byte{methodCreateTodo}, data...)
-
-	// Send as binary over WebSocket
-	log.Println("WASM: Sending CreateTodoRequest over WebSocket...")
-	array := js.Global().Get("Uint8Array").New(len(finalMsg))
-	js.CopyBytesToJS(array, finalMsg)
-	ws.Call("send", array)
 
 	return nil
 }
@@ -153,24 +53,10 @@ func createTodo(this js.Value, args []js.Value) interface{} {
 func listTodos(this js.Value, args []js.Value) interface{} {
 	log.Println("WASM: listTodos called")
 
-	// Build the ListTodosRequest
 	req := &todos.ListTodosRequest{}
-
-	// Marshal the request to Protobuf
-	data, err := proto.Marshal(req)
-	if err != nil {
-		log.Printf("WASM: Failed to marshal ListTodosRequest: %v\n", err)
-		return nil
+	if err := ws.SendRequest(grpcws.MethodListTodos, req); err != nil {
+		log.Printf("WASM: Failed to send ListTodosRequest: %v\n", err)
 	}
-
-	// Prepend method ID
-	finalMsg := append([]byte{methodListTodos}, data...)
-
-	// Send as binary over WebSocket
-	log.Println("WASM: Sending ListTodosRequest over WebSocket...")
-	array := js.Global().Get("Uint8Array").New(len(finalMsg))
-	js.CopyBytesToJS(array, finalMsg)
-	ws.Call("send", array)
 
 	return nil
 }
@@ -182,28 +68,10 @@ func updateTodo(this js.Value, args []js.Value) interface{} {
 	done := args[2].Bool()
 	log.Printf("WASM: updateTodo called with id=%s, text=%s, done=%v\n", id, text, done)
 
-	// Build the UpdateTodoRequest
-	req := &todos.UpdateTodoRequest{
-		Id:   id,
-		Text: text,
-		Done: done,
+	req := &todos.UpdateTodoRequest{Id: id, Text: text, Done: done}
+	if err := ws.SendRequest(grpcws.MethodUpdateTodo, req); err != nil {
+		log.Printf("WASM: Failed to send UpdateTodoRequest: %v\n", err)
 	}
-
-	// Marshal the request to Protobuf
-	data, err := proto.Marshal(req)
-	if err != nil {
-		log.Printf("WASM: Failed to marshal UpdateTodoRequest: %v\n", err)
-		return nil
-	}
-
-	// Prepend method ID
-	finalMsg := append([]byte{methodUpdateTodo}, data...)
-
-	// Send as binary over WebSocket
-	log.Println("WASM: Sending UpdateTodoRequest over WebSocket...")
-	array := js.Global().Get("Uint8Array").New(len(finalMsg))
-	js.CopyBytesToJS(array, finalMsg)
-	ws.Call("send", array)
 
 	return nil
 }
@@ -213,26 +81,56 @@ func deleteTodo(this js.Value, args []js.Value) interface{} {
 	id := args[0].String()
 	log.Printf("WASM: deleteTodo called with id=%s\n", id)
 
-	// Build the DeleteTodoRequest
-	req := &todos.DeleteTodoRequest{
-		Id: id,
+	req := &todos.DeleteTodoRequest{Id: id}
+	if err := ws.SendRequest(grpcws.MethodDeleteTodo, req); err != nil {
+		log.Printf("WASM: Failed to send DeleteTodoRequest: %v\n", err)
 	}
-
-	// Marshal the request to Protobuf
-	data, err := proto.Marshal(req)
-	if err != nil {
-		log.Printf("WASM: Failed to marshal DeleteTodoRequest: %v\n", err)
-		return nil
-	}
-
-	// Prepend method ID
-	finalMsg := append([]byte{methodDeleteTodo}, data...)
-
-	// Send as binary over WebSocket
-	log.Println("WASM: Sending DeleteTodoRequest over WebSocket...")
-	array := js.Global().Get("Uint8Array").New(len(finalMsg))
-	js.CopyBytesToJS(array, finalMsg)
-	ws.Call("send", array)
 
 	return nil
+}
+
+// onCreateTodo handles the CreateTodoResponse
+func onCreateTodo(args ...interface{}) {
+	id := args[0].(string)
+	text := args[1].(string)
+	done := args[2].(bool)
+	log.Printf("WASM: Received CreateTodoResponse => ID: %s, Text: %s, Done: %v\n", id, text, done)
+	js.Global().Call("onCreateTodo", id, text, done)
+}
+
+// onListTodo handles each Todo item in ListTodosResponse
+func onListTodo(args ...interface{}) {
+    todos := args[0].([]*todos.Todo)
+
+    jsTodos := js.Global().Get("Array").New()
+    for _, todo := range todos {
+        jsTodo := js.Global().Get("Object").New()
+        jsTodo.Set("id", todo.Id)
+        jsTodo.Set("text", todo.Text)
+        jsTodo.Set("done", todo.Done)
+        jsTodos.Call("push", jsTodo)
+    }
+
+    // Verify JS function exists before calling
+    if js.Global().Get("onListTodos").Type() == js.TypeFunction {
+        js.Global().Call("onListTodos", jsTodos)
+    } else {
+        log.Panic("JS function onListTodos is not defined")
+    }
+}
+
+// onUpdateTodo handles the UpdateTodoResponse
+func onUpdateTodo(args ...interface{}) {
+	id := args[0].(string)
+	text := args[1].(string)
+	done := args[2].(bool)
+	log.Printf("WASM: Received UpdateTodoResponse => ID: %s, Text: %s, Done: %v\n", id, text, done)
+	js.Global().Call("onUpdateTodo", id, text, done)
+}
+
+// onDeleteTodo handles the DeleteTodoResponse
+func onDeleteTodo(args ...interface{}) {
+	success := args[0].(bool)
+	log.Printf("WASM: Received DeleteTodoResponse => Success: %v\n", success)
+	js.Global().Call("onDeleteTodo", success)
 }

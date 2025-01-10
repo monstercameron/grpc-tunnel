@@ -121,7 +121,7 @@ func (s *todoServer) ListTodos(ctx context.Context, req *todos.ListTodosRequest)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	log.Printf("ListTodos: returning %d todos\n", len(s.store))
+	log.Printf("ListTodos: %d todos in store: %+v\n", len(s.store), s.store)
 	return &todos.ListTodosResponse{Todos: s.store}, nil
 }
 
@@ -203,40 +203,30 @@ var upgrader = websocket.Upgrader{
 func handleWebSocketConnection(conn *websocket.Conn, client todos.TodoServiceClient) {
 	defer conn.Close()
 
+	log.Println("WebSocket connection established.")
 	for {
 		msgType, data, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket read error: %v\n", err)
 			return
 		}
+		log.Printf("Received message (type: %d): %v\n", msgType, data)
+
 		if msgType != websocket.BinaryMessage {
-			log.Println("Ignoring non-binary message on WebSocket.")
+			log.Println("Ignoring non-binary message.")
 			continue
 		}
 
-		// The first byte indicates the method ID
 		if len(data) < 1 {
-			log.Println("Received empty WebSocket message, ignoring.")
+			log.Println("Empty message received, skipping.")
 			continue
 		}
 
-		method := data[0]   // 1 byte for method ID
-		payload := data[1:] // the rest is the Protobuf request
+		method := data[0]
+		payload := data[1:]
+		log.Printf("Processing method ID %d with payload: %v\n", method, payload)
 
 		switch method {
-		case 0: // CreateTodo
-			var req todos.CreateTodoRequest
-			if err := proto.Unmarshal(payload, &req); err != nil {
-				log.Printf("Failed to unmarshal CreateTodoRequest: %v\n", err)
-				continue
-			}
-			resp, err := client.CreateTodo(context.Background(), &req)
-			if err != nil {
-				log.Printf("CreateTodo failed: %v\n", err)
-				continue
-			}
-			sendResponse(conn, 0, resp)
-
 		case 1: // ListTodos
 			var req todos.ListTodosRequest
 			if err := proto.Unmarshal(payload, &req); err != nil {
@@ -248,33 +238,8 @@ func handleWebSocketConnection(conn *websocket.Conn, client todos.TodoServiceCli
 				log.Printf("ListTodos failed: %v\n", err)
 				continue
 			}
+			log.Printf("ListTodos response: %+v\n", resp)
 			sendResponse(conn, 1, resp)
-
-		case 2: // UpdateTodo
-			var req todos.UpdateTodoRequest
-			if err := proto.Unmarshal(payload, &req); err != nil {
-				log.Printf("Failed to unmarshal UpdateTodoRequest: %v\n", err)
-				continue
-			}
-			resp, err := client.UpdateTodo(context.Background(), &req)
-			if err != nil {
-				log.Printf("UpdateTodo failed: %v\n", err)
-				continue
-			}
-			sendResponse(conn, 2, resp)
-
-		case 3: // DeleteTodo
-			var req todos.DeleteTodoRequest
-			if err := proto.Unmarshal(payload, &req); err != nil {
-				log.Printf("Failed to unmarshal DeleteTodoRequest: %v\n", err)
-				continue
-			}
-			resp, err := client.DeleteTodo(context.Background(), &req)
-			if err != nil {
-				log.Printf("DeleteTodo failed: %v\n", err)
-				continue
-			}
-			sendResponse(conn, 3, resp)
 
 		default:
 			log.Printf("Unknown method ID: %d\n", method)
