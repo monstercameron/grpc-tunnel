@@ -1,4 +1,4 @@
-// script.js
+// public/script.js
 
 // 1. Load the WASM module
 const go = new Go();
@@ -6,7 +6,7 @@ WebAssembly.instantiateStreaming(fetch("client.wasm"), go.importObject)
   .then((result) => {
     console.log("JS: Successfully loaded and initialized the WASM module.");
     go.run(result.instance);
-    // Note: ListTodos will be called once WebSocket connection is open
+    // We rely on "onWebSocketOpen" (defined in the WASM) to trigger an initial ListTodos()
   })
   .catch((err) => console.error("JS: Failed to load WASM module:", err));
 
@@ -15,7 +15,6 @@ const todoInput = document.querySelector("#todoInput");
 const addTodoBtn = document.querySelector("#addTodoBtn");
 const todosList = document.querySelector("#todosList");
 
-// Debugging: Confirm UI elements exist
 console.log("JS: Initialized UI elements:", {
   todoInput,
   addTodoBtn,
@@ -70,7 +69,9 @@ window.onListTodos = (todos) => {
 // Called when a todo is updated successfully
 window.onUpdateTodo = (id, text, done) => {
   console.log("JS: Received onUpdateTodo callback:", { id, text, done });
-  const listItem = document.querySelector(`#${id}`);
+
+  // Use document.getElementById instead of querySelector
+  const listItem = document.getElementById(id);
   if (!listItem) {
     console.warn("JS: Todo item not found in the UI for update:", id);
     return;
@@ -92,13 +93,14 @@ window.onDeleteTodo = (success) => {
 };
 
 // 5. WebSocket Connection Confirmation
-
-// Called when the WebSocket connection is established
 window.onWebSocketOpen = () => {
   console.log("JS: WebSocket connection established. Fetching todos...");
-  window.ListTodos(); // Fetch todos from the server
-  showNotification("Connected to the server.", "info");
+  // At this point, WSReady is already true. Just call ListTodos.
+  window.ListTodos(); 
+  showNotification("Connected to the server. Fetching todos...", "info");
 };
+
+
 
 // 6. Helper Functions
 
@@ -121,7 +123,7 @@ const addTodoItem = (id, text, done) => {
 
   // Create a new list item for the todo
   const li = document.createElement("li");
-  li.id = id; // Set the ID for the list item
+  li.id = id; // The ID attribute for getElementById
   li.className = "p-4 bg-indigo-50 rounded-lg shadow flex justify-between items-center";
 
   // Left side: Checkbox and text
@@ -180,10 +182,6 @@ const addTodoItem = (id, text, done) => {
 
 /**
  * Updates an existing todo item in the UI.
- * @param {HTMLElement} listItem - The DOM element representing the todo item.
- * @param {string} id - The unique ID of the todo.
- * @param {string} text - The updated text of the todo.
- * @param {boolean} done - Whether the todo is marked as done.
  */
 const updateTodoListItem = (listItem, id, text, done) => {
   console.log("JS: Updating UI for todo item:", { id, text, done });
@@ -195,7 +193,6 @@ const updateTodoListItem = (listItem, id, text, done) => {
   span.textContent = text;
   span.className = done ? "line-through text-gray-400" : "text-gray-800";
 };
-
 
 /**
  * Reloads the entire todo list.
@@ -214,7 +211,6 @@ const reloadTodos = () => {
 const showNotification = (message, type) => {
   console.log(`JS: Notification - ${message} [${type}]`);
 
-  // Check if the notification container already exists; if not, create it
   let container = document.querySelector("#notification-container");
   if (!container) {
     container = document.createElement("div");
@@ -223,13 +219,12 @@ const showNotification = (message, type) => {
     document.body.appendChild(container);
   }
 
-  // Create a new notification element
   const notification = document.createElement("div");
   notification.className = `max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 ${getNotificationTypeClasses(
     type
   )} p-4`;
 
-  // Icon container
+  // Icon
   const icon = document.createElement("div");
   icon.className = "flex-shrink-0";
   const svgNS = "http://www.w3.org/2000/svg";
@@ -243,7 +238,6 @@ const showNotification = (message, type) => {
   path.setAttribute("stroke-linejoin", "round");
   path.setAttribute("stroke-width", "2");
 
-  // Set the appropriate icon path based on the notification type
   switch (type) {
     case "success":
       path.setAttribute("d", "M5 13l4 4L19 7");
@@ -254,18 +248,12 @@ const showNotification = (message, type) => {
       svg.classList.add("text-red-600");
       break;
     case "warning":
-      path.setAttribute(
-        "d",
-        "M12 8v4m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"
-      );
+      path.setAttribute("d", "M12 8v4m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z");
       svg.classList.add("text-yellow-600");
       break;
     case "info":
     default:
-      path.setAttribute(
-        "d",
-        "M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"
-      );
+      path.setAttribute("d", "M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z");
       svg.classList.add("text-blue-600");
       break;
   }
@@ -273,7 +261,7 @@ const showNotification = (message, type) => {
   svg.appendChild(path);
   icon.appendChild(svg);
 
-  // Message container
+  // Message
   const messageDiv = document.createElement("div");
   messageDiv.className = "ml-3 w-0 flex-1 pt-0.5";
   const messageText = document.createElement("p");
@@ -295,13 +283,13 @@ const showNotification = (message, type) => {
     container.removeChild(notification);
   });
 
-  // Assemble the notification
+  // Assemble
   notification.appendChild(icon);
   notification.appendChild(messageDiv);
   notification.appendChild(closeButton);
   container.appendChild(notification);
 
-  // Automatically remove the notification after 5 seconds
+  // Auto-remove after 5s
   setTimeout(() => {
     if (container.contains(notification)) {
       container.removeChild(notification);
@@ -309,11 +297,7 @@ const showNotification = (message, type) => {
   }, 5000);
 };
 
-/**
- * Returns the CSS classes for the notification based on its type.
- * @param {string} type - The type of notification (success, error, warning, info).
- * @returns {string} - The CSS classes for the notification.
- */
+// Utility to assign border color
 const getNotificationTypeClasses = (type) => {
   switch (type) {
     case "success":
@@ -327,4 +311,3 @@ const getNotificationTypeClasses = (type) => {
       return "border-l-4 border-blue-500";
   }
 };
-
