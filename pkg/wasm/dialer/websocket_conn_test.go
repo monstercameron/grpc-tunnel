@@ -17,18 +17,18 @@ func TestWebSocketConn_NetConnInterface(t *testing.T) {
 
 	// Create a mock js.Value that has the methods expected by NewWebSocketConn.
 	// In a real WASM environment, this would be js.Global().Get("WebSocket").New(url).
-	mockWebSocket := js.ValueOf(map[string]interface{}{
+	mockBrowserWebSocket := js.ValueOf(map[string]interface{}{
 		"readyState": js.ValueOf(1), // CONNECTING or OPEN
-		"send":       js.FuncOf(func(this js.Value, args []js.Value) interface{} { return nil }),
-		"close":      js.FuncOf(func(this js.Value, args []js.Value) interface{} { return nil }),
+		"send":       js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
+		"close":      js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
 	})
 
 	// Attempt to create a WebSocketConn from the mock.
 	// This should not panic and should return a non-nil net.Conn.
-	var connection net.Conn
-	connection = NewWebSocketConn(mockWebSocket)
+	var networkConnection net.Conn
+	networkConnection = NewWebSocketConn(mockBrowserWebSocket)
 
-	if connection == nil {
+	if networkConnection == nil {
 		t.Fatal("NewWebSocketConn returned nil, expected a net.Conn implementation")
 	}
 

@@ -190,7 +190,7 @@ func TestWebSocketConn_Addresses(t *testing.T) {
 // TestWebSocketConn_Deadlines tests deadline methods
 func TestWebSocketConn_Deadlines(t *testing.T) {
 	conn := &webSocketConn{
-		ws: nil, // Use nil since we can't create real websocket.Conn in tests
+		websocket: nil, // Use nil since we can't create real websocket.Conn in tests
 	}
 
 	now := time.Now()

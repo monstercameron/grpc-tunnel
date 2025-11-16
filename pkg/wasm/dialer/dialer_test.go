@@ -13,8 +13,8 @@ import (
 
 // TestNew_ReturnType tests that New returns a valid grpc.DialOption
 func TestNew_ReturnType(t *testing.T) {
-	opt := New("ws://localhost:8080")
-	if opt == nil {
+	dialOption := New("ws://localhost:8080")
+	if dialOption == nil {
 		t.Fatal("New returned nil")
 	}
 }
@@ -22,8 +22,8 @@ func TestNew_ReturnType(t *testing.T) {
 // TestNew_URLFormats tests various WebSocket URL formats
 func TestNew_URLFormats(t *testing.T) {
 	tests := []struct {
-		name string
-		url  string
+		testName     string
+		websocketURL string
 	}{
 		{"ws scheme", "ws://localhost:8080"},
 		{"wss scheme", "wss://localhost:8080"},
@@ -34,11 +34,11 @@ func TestNew_URLFormats(t *testing.T) {
 		{"domain", "ws://example.com:8080"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opt := New(tt.url)
-			if opt == nil {
-				t.Errorf("New(%s) returned nil", tt.url)
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			dialOption := New(testCase.websocketURL)
+			if dialOption == nil {
+				t.Errorf("New(%s) returned nil", testCase.websocketURL)
 			}
 		})
 	}
@@ -53,65 +53,65 @@ func TestNewWebSocketDialer_NoWebSocketGlobal(t *testing.T) {
 	t.Skip("Cannot test missing WebSocket in real WASM environment")
 }
 
-// TestWebSocketAddr_Interface tests the webSocketAddr implementation
-func TestWebSocketAddr_Interface(t *testing.T) {
-	addr := &webSocketAddr{
-		network: "websocket",
-		address: "test-address",
+// TestBrowserWebSocketAddr_Interface tests the browserWebSocketAddr implementation
+func TestBrowserWebSocketAddr_Interface(t *testing.T) {
+	websocketAddress := &browserWebSocketAddr{
+		networkType:   "websocket",
+		addressString: "test-address",
 	}
 
-	if addr.Network() != "websocket" {
-		t.Errorf("Network() = %s, want websocket", addr.Network())
+	if websocketAddress.Network() != "websocket" {
+		t.Errorf("Network() = %s, want websocket", websocketAddress.Network())
 	}
 
-	if addr.String() != "test-address" {
-		t.Errorf("String() = %s, want test-address", addr.String())
-	}
-}
-
-// TestWebSocketAddr_EmptyValues tests webSocketAddr with empty values
-func TestWebSocketAddr_EmptyValues(t *testing.T) {
-	addr := &webSocketAddr{}
-
-	if addr.Network() != "" {
-		t.Errorf("Network() = %s, want empty string", addr.Network())
-	}
-
-	if addr.String() != "" {
-		t.Errorf("String() = %s, want empty string", addr.String())
+	if websocketAddress.String() != "test-address" {
+		t.Errorf("String() = %s, want test-address", websocketAddress.String())
 	}
 }
 
-// TestNewWebSocketDialer_ContextCancellation tests context cancellation
-func TestNewWebSocketDialer_ContextCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+// TestBrowserWebSocketAddr_EmptyValues tests browserWebSocketAddr with empty values
+func TestBrowserWebSocketAddr_EmptyValues(t *testing.T) {
+	websocketAddress := &browserWebSocketAddr{}
 
-	dialer := newWebSocketDialer("ws://localhost:8080")
+	if websocketAddress.Network() != "" {
+		t.Errorf("Network() = %s, want empty string", websocketAddress.Network())
+	}
 
-	_, err := dialer(ctx, "test:1234")
+	if websocketAddress.String() != "" {
+		t.Errorf("String() = %s, want empty string", websocketAddress.String())
+	}
+}
+
+// TestNewBrowserWebSocketDialer_ContextCancellation tests context cancellation
+func TestNewBrowserWebSocketDialer_ContextCancellation(t *testing.T) {
+	dialContext, cancelFunc := context.WithCancel(context.Background())
+	cancelFunc() // Cancel immediately
+
+	websocketDialer := newBrowserWebSocketDialer("ws://localhost:8080")
+
+	_, err := websocketDialer(dialContext, "test:1234")
 
 	if err == nil {
 		t.Error("expected error with cancelled context")
 	}
 
-	if ctx.Err() == nil {
+	if dialContext.Err() == nil {
 		t.Error("expected context to be cancelled")
 	}
 }
 
-// TestNewWebSocketDialer_Timeout tests dial timeout
-func TestNewWebSocketDialer_Timeout(t *testing.T) {
+// TestNewBrowserWebSocketDialer_Timeout tests dial timeout
+func TestNewBrowserWebSocketDialer_Timeout(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	dialContext, cancelFunc := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelFunc()
 
-	dialer := newWebSocketDialer("ws://localhost:9999") // Non-existent server
+	websocketDialer := newBrowserWebSocketDialer("ws://localhost:9999") // Non-existent server
 
-	_, err := dialer(ctx, "test:1234")
+	_, err := websocketDialer(dialContext, "test:1234")
 
 	// Should timeout or fail to connect
 	if err == nil {
@@ -125,129 +125,129 @@ func TestNew_Integration(t *testing.T) {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	dialContext, cancelFunc := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelFunc()
 
-	opt := New("ws://localhost:9999")
+	dialOption := New("ws://localhost:9999")
 
 	// Try to dial - should fail since no server is running
-	_, err := grpc.DialContext(ctx, "ignored:1234", opt, grpc.WithInsecure())
+	_, err := grpc.DialContext(dialContext, "ignored:1234", dialOption, grpc.WithInsecure())
 
 	if err == nil {
 		t.Error("expected connection error with no server running")
 	}
 }
 
-// TestWebSocketConnection_Channels tests channel initialization
-func TestWebSocketConnection_Channels(t *testing.T) {
+// TestBrowserWebSocketConnection_Channels tests channel initialization
+func TestBrowserWebSocketConnection_Channels(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
 	// Create a mock WebSocket value
-	mockWS := js.Global().Get("Object").New()
-	mockWS.Set("readyState", 1) // OPEN
+	mockBrowserWebSocket := js.Global().Get("Object").New()
+	mockBrowserWebSocket.Set("readyState", 1) // OPEN
 
-	conn := NewWebSocketConn(mockWS).(*webSocketConnection)
+	networkConnection := NewWebSocketConn(mockBrowserWebSocket).(*browserWebSocketConnection)
 
-	if conn.readMessageChannel == nil {
-		t.Error("readMessageChannel not initialized")
+	if networkConnection.incomingMessagesChannel == nil {
+		t.Error("incomingMessagesChannel not initialized")
 	}
 
-	if conn.readErrorChannel == nil {
-		t.Error("readErrorChannel not initialized")
+	if networkConnection.incomingErrorsChannel == nil {
+		t.Error("incomingErrorsChannel not initialized")
 	}
 
-	if conn.writeMessageChannel == nil {
-		t.Error("writeMessageChannel not initialized")
+	if networkConnection.outgoingMessagesChannel == nil {
+		t.Error("outgoingMessagesChannel not initialized")
 	}
 }
 
-// TestWebSocketConnection_LocalAddr tests LocalAddr method
-func TestWebSocketConnection_LocalAddr(t *testing.T) {
+// TestBrowserWebSocketConnection_LocalAddr tests LocalAddr method
+func TestBrowserWebSocketConnection_LocalAddr(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockWS := js.Global().Get("Object").New()
-	conn := NewWebSocketConn(mockWS)
+	mockBrowserWebSocket := js.Global().Get("Object").New()
+	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
-	addr := conn.LocalAddr()
-	if addr == nil {
+	localAddress := networkConnection.LocalAddr()
+	if localAddress == nil {
 		t.Error("LocalAddr() returned nil")
 	}
 
-	if addr.Network() != "websocket" {
-		t.Errorf("LocalAddr().Network() = %s, want websocket", addr.Network())
+	if localAddress.Network() != "websocket" {
+		t.Errorf("LocalAddr().Network() = %s, want websocket", localAddress.Network())
 	}
 }
 
-// TestWebSocketConnection_RemoteAddr tests RemoteAddr method
-func TestWebSocketConnection_RemoteAddr(t *testing.T) {
+// TestBrowserWebSocketConnection_RemoteAddr tests RemoteAddr method
+func TestBrowserWebSocketConnection_RemoteAddr(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockWS := js.Global().Get("Object").New()
-	conn := NewWebSocketConn(mockWS)
+	mockBrowserWebSocket := js.Global().Get("Object").New()
+	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
-	addr := conn.RemoteAddr()
-	if addr == nil {
+	remoteAddress := networkConnection.RemoteAddr()
+	if remoteAddress == nil {
 		t.Error("RemoteAddr() returned nil")
 	}
 
-	if addr.Network() != "websocket" {
-		t.Errorf("RemoteAddr().Network() = %s, want websocket", addr.Network())
+	if remoteAddress.Network() != "websocket" {
+		t.Errorf("RemoteAddr().Network() = %s, want websocket", remoteAddress.Network())
 	}
 }
 
-// TestWebSocketConnection_Deadlines tests deadline methods
-func TestWebSocketConnection_Deadlines(t *testing.T) {
+// TestBrowserWebSocketConnection_Deadlines tests deadline methods
+func TestBrowserWebSocketConnection_Deadlines(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockWS := js.Global().Get("Object").New()
-	conn := NewWebSocketConn(mockWS)
+	mockBrowserWebSocket := js.Global().Get("Object").New()
+	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
-	now := time.Now()
-	future := now.Add(time.Second)
+	currentTime := time.Now()
+	futureDeadline := currentTime.Add(time.Second)
 
 	// All deadline methods should return nil (no error)
-	if err := conn.SetDeadline(future); err != nil {
+	if err := networkConnection.SetDeadline(futureDeadline); err != nil {
 		t.Errorf("SetDeadline() error = %v, want nil", err)
 	}
 
-	if err := conn.SetReadDeadline(future); err != nil {
+	if err := networkConnection.SetReadDeadline(futureDeadline); err != nil {
 		t.Errorf("SetReadDeadline() error = %v, want nil", err)
 	}
 
-	if err := conn.SetWriteDeadline(future); err != nil {
+	if err := networkConnection.SetWriteDeadline(futureDeadline); err != nil {
 		t.Errorf("SetWriteDeadline() error = %v, want nil", err)
 	}
 }
 
-// TestWebSocketConnection_Close tests Close method
-func TestWebSocketConnection_Close(t *testing.T) {
+// TestBrowserWebSocketConnection_Close tests Close method
+func TestBrowserWebSocketConnection_Close(t *testing.T) {
 	if !js.Global().Get("WebSocket").Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	closeCalled := false
-	mockWS := js.Global().Get("Object").New()
-	mockWS.Set("close", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		closeCalled = true
+	closeMethodCalled := false
+	mockBrowserWebSocket := js.Global().Get("Object").New()
+	mockBrowserWebSocket.Set("close", js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} {
+		closeMethodCalled = true
 		return nil
 	}))
 
-	conn := NewWebSocketConn(mockWS)
-	err := conn.Close()
+	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
+	err := networkConnection.Close()
 
 	if err != nil {
 		t.Errorf("Close() error = %v, want nil", err)
 	}
 
-	if !closeCalled {
+	if !closeMethodCalled {
 		t.Error("WebSocket.close() was not called")
 	}
 }
