@@ -8,15 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// bufferPool reduces memory allocations by reusing byte slices
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		// Default buffer size matches typical gRPC frame size
-		buf := make([]byte, 4096)
-		return &buf
-	},
-}
-
 // webSocketConn adapts a gorilla/websocket.Conn to implement net.Conn.
 // This allows gRPC to use WebSocket as its transport by providing a standard
 // network connection interface that gRPC expects.

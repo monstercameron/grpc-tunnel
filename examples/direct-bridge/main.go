@@ -1,3 +1,5 @@
+//go:build !js && !wasm
+
 // Direct gRPC-over-WebSocket example - no proxy needed!
 package main
 

@@ -16,9 +16,6 @@ import (
 const (
 	// WebSocket ready states (https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState)
 	webSocketStateConnecting = 0 // Connection not yet open
-	webSocketStateOpen       = 1 // Connection open and ready to communicate
-	webSocketStateClosing    = 2 // Connection in the process of closing
-	webSocketStateClosed     = 3 // Connection closed or couldn't be opened
 
 	// JavaScript WebSocket event handlers
 	jsEventOnOpen = "onopen"
