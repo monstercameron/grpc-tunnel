@@ -276,14 +276,67 @@ bridge.ServeHandler(bridge.ServerConfig{
 Run the test suite:
 
 ```bash
+# Quick pre-commit check (format + lint + tests)
+make check
+
 # Unit and integration tests
-go test ./pkg/bridge/... -v -cover
+go test ./pkg/... -v -cover
+
+# Unit tests with race detector
+go test ./pkg/... -v -race
 
 # E2E tests (requires Playwright)
-cd e2e && go test -v
+go test ./e2e/... -v
+
+# Fuzz tests
+make fuzz
+
+# Or run individual fuzzer
+go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=60s
 ```
 
-**Test Coverage:** 98.2% with comprehensive unit and integration tests
+**Test Coverage:** 85%+ with comprehensive unit, integration, fuzz, and e2e tests
+
+## Development Workflow
+
+### Before Committing
+
+**Pre-commit hooks are automatically installed** to prevent commits with linting or formatting issues:
+
+```bash
+# Manual pre-commit check
+make check
+
+# Auto-format code
+make fmt
+
+# Run linter
+make lint
+
+# Auto-fix lint issues
+make lint-fix
+```
+
+### CI/CD Pipeline
+
+1. **Linting** - Code must pass `golangci-lint` with `.golangci.yml` config
+2. **Formatting** - Code must be formatted with `gofmt`
+3. **Tests** - All tests (unit, race, fuzz, e2e) must pass
+4. **Security Scan** - Gosec scans for security issues (appears in GitHub Security tab)
+   - Checks for SQL injection, hardcoded credentials, weak crypto, etc.
+   - Informational only - doesn't block builds
+5. **Auto-Release** - Only creates new release if all tests pass
+
+### Security Scan
+
+The `security` job in CI runs [Gosec](https://github.com/securego/gosec) to detect:
+- SQL injection vulnerabilities
+- Hardcoded credentials or tokens
+- Weak cryptographic algorithms
+- File path traversal issues  
+- Unhandled errors that could cause security problems
+
+Results appear in **GitHub → Security → Code scanning alerts**. The scan doesn't block builds but provides visibility into potential security issues.
 
 ## Production Checklist
 
