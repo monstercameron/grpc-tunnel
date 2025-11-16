@@ -1,0 +1,39 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+coverage.html
+coverage-report.txt
+
+# WASM builds (generated)
+public/client.wasm
+public/*.wasm
+
+# Runtime data
+data/todos.json
+data/*.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Go workspace
+go.work
+go.work.sum
+
+# Temporary files
+*.tmp
+*.log
+test.go
