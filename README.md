@@ -1,6 +1,6 @@
 # grpc-tunnel
 
-A lightweight Go library that enables **direct gRPC communication over WebSocket**. Both client and server use this library to tunnel native gRPC calls through WebSocket connections, making gRPC accessible from browsers via WebAssembly.
+**Run native gRPC from web browsers.** This Go library tunnels gRPC calls through WebSocket connections, enabling full gRPC support (streaming, metadata, Protobuf) in browsers via WebAssembly—without gRPC-Web's limitations.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/monstercameron/grpc-tunnel.svg)](https://pkg.go.dev/github.com/monstercameron/grpc-tunnel)
 [![Go Report Card](https://goreportcard.com/badge/github.com/monstercameron/grpc-tunnel)](https://goreportcard.com/report/github.com/monstercameron/grpc-tunnel)
@@ -10,24 +10,88 @@ A lightweight Go library that enables **direct gRPC communication over WebSocket
 [![Go Version](https://img.shields.io/github/go-mod/go-version/monstercameron/grpc-tunnel)](https://go.dev/)
 [![Latest Release](https://img.shields.io/github/v/release/monstercameron/grpc-tunnel)](https://github.com/monstercameron/grpc-tunnel/releases)
 
+## Why This Exists
+
+**The Problem:** Browsers can't make native gRPC calls because they lack HTTP/2 features that gRPC requires.
+
+**What Browsers Can't Do:**
+- ❌ HTTP/2 trailers (required for gRPC status codes)
+- ❌ Bidirectional streaming over HTTP/2
+- ❌ Access to HTTP/2 frames and flow control
+- ❌ Send custom HTTP/2 headers for metadata
+- ❌ HTTP/2 RST_STREAM for cancellation
+- ❌ Direct control over HTTP/2 streams
+
+**Common Solution:** gRPC-Web—but it's limited:
+- ❌ No bidirectional streaming
+- ❌ Requires special proxy (Envoy)
+- ❌ Different wire format than real gRPC
+- ❌ Incompatible with existing gRPC tools
+
+**This Solution:** Tunnel real gRPC over WebSocket:
+- ✅ Full gRPC support (all streaming modes, metadata)
+- ✅ Works with any gRPC server (no special proxy)
+- ✅ Native Protobuf efficiency
+- ✅ Standard gRPC tooling compatible
+- ✅ Firewall-friendly (WebSocket = HTTP upgrade)
+
+**What This Enables in Browsers:**
+- ✅ **Server streaming** - Live updates, real-time data feeds
+- ✅ **Client streaming** - Upload streams, bulk operations
+- ✅ **Bidirectional streaming** - Chat, collaborative editing, live sync
+- ✅ **Metadata/Headers** - Authentication, tracing, custom headers
+- ✅ **Trailers** - Status codes, error details, streaming metadata
+- ✅ **Cancellation** - Proper cleanup, request abortion
+- ✅ **Backpressure** - Flow control for large streams
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Browser WASM] -->|WebSocket<br/>binary frames| B[This Library]
+    B -->|net.Conn| C[Your gRPC Server]
+    B -.->|HTTP/2 frames<br/>inside WebSocket| B
+```
+
+The library wraps WebSocket as `net.Conn`, so gRPC thinks it's talking over a normal network connection. Zero protocol translation—just pure HTTP/2 frames tunneled through WebSocket.
+
+## Quick Start
+
+### Installation
+
+```bash
+go get github.com/monstercameron/grpc-tunnel
+```
+
+### Server (3 lines)
+
+```go
+grpcServer := grpc.NewServer()
+pb.RegisterYourServiceServer(grpcServer, &yourImpl{})
+http.Handle("/", bridge.ServeHandler(bridge.ServerConfig{GRPCServer: grpcServer}))
+```
+
+### Browser Client (WASM)
+
+```go
+conn, _ := grpc.Dial("localhost:8080",
+    dialer.New("ws://localhost:8080"),
+    grpc.WithTransportCredentials(insecure.NewCredentials()))
+client := pb.NewYourServiceClient(conn)
+```
+
+That's it. Full gRPC in browsers.
+
 ## Features
 
-🎯 **Direct Communication** - No proxy server needed, client and server talk directly via WebSocket  
-🚀 **Zero Overhead** - Thin wrapper around WebSocket as `net.Conn`, gRPC handles everything else  
-🔌 **Simple API** - One function for client (`DialOption`), one for server (`ServeHandler`)  
-🛡️ **Full gRPC Support** - Unary calls, streaming, metadata all work natively  
-📦 **Minimal Dependencies** - Only `gorilla/websocket` + `google.golang.org/grpc`  
-🧪 **Well Tested** - 98.2% test coverage with comprehensive unit and integration tests  
-🌐 **Browser Ready** - WASM client support for running gRPC from web browsers
+- 🎯 **Native gRPC** - All features work: unary, streaming (client/server/bidirectional), metadata
+- 🚀 **Zero overhead** - Thin `net.Conn` wrapper, no protocol translation
+- 🔌 **Simple API** - One function for server, one for client
+- 🌐 **Browser ready** - WASM support for running gRPC directly in browsers
+- 📦 **Minimal deps** - Only `gorilla/websocket` + standard gRPC
+- 🧪 **Battle-tested** - Comprehensive test suite with race detection
 
-## Why gRPC over WebSocket?
-
-- **Browser Compatibility** - Native gRPC requires HTTP/2 with features not fully supported in browsers
-- **Firewall Friendly** - WebSocket connections (port 80/443) work through most corporate firewalls
-- **No gRPC-Web** - Use native gRPC instead of the limited gRPC-Web protocol
-- **End-to-End Binary** - Maintain Protobuf's efficiency throughout the entire stack
-
-## Architecture
+## Detailed Architecture
 
 ```mermaid
 graph LR
@@ -67,99 +131,7 @@ The bridge provides transparent WebSocket transport for gRPC:
 - **Client side**: gRPC → HTTP/2 frames → WebSocket binary messages
 - **Server side**: WebSocket binary messages → HTTP/2 frames → gRPC
 
-## Quick Start
-
-### Installation
-
-```bash
-go get github.com/monstercameron/grpc-tunnel
-```
-
-### Server Side
-
-```go
-package main
-
-import (
-    "log"
-    "net/http"
-    
-    "google.golang.org/grpc"
-    "github.com/monstercameron/grpc-tunnel/pkg/bridge"
-    pb "your-project/proto"
-)
-
-func main() {
-    // Create standard gRPC server
-    grpcServer := grpc.NewServer()
-    pb.RegisterYourServiceServer(grpcServer, &yourServiceImpl{})
-
-    // Serve gRPC over WebSocket
-    http.Handle("/", bridge.ServeHandler(bridge.ServerConfig{
-        GRPCServer: grpcServer,
-    }))
-
-    log.Fatal(http.ListenAndServe(":8080", nil))
-}
-```
-
-### Client Side (Native Go)
-
-```go
-package main
-
-import (
-    "context"
-    
-    "google.golang.org/grpc"
-    "google.golang.org/grpc/credentials/insecure"
-    "github.com/monstercameron/grpc-tunnel/pkg/bridge"
-    pb "your-project/proto"
-)
-
-func main() {
-    conn, _ := grpc.Dial(
-        "localhost:8080",
-        bridge.DialOption("ws://localhost:8080"),
-        grpc.WithTransportCredentials(insecure.NewCredentials()),
-    )
-    defer conn.Close()
-
-    client := pb.NewYourServiceClient(conn)
-    resp, _ := client.YourMethod(context.Background(), &pb.Request{})
-}
-```
-
-### Client Side (Browser WASM)
-
-```go
-//go:build js && wasm
-
-package main
-
-import (
-    "context"
-    
-    "google.golang.org/grpc"
-    "google.golang.org/grpc/credentials/insecure"
-    "github.com/monstercameron/grpc-tunnel/pkg/wasm/dialer"
-    pb "your-project/proto"
-)
-
-func main() {
-    conn, _ := grpc.Dial(
-        "localhost:8080",
-        dialer.New("ws://localhost:8080"),
-        grpc.WithTransportCredentials(insecure.NewCredentials()),
-    )
-    defer conn.Close()
-
-    client := pb.NewYourServiceClient(conn)
-    resp, _ := client.YourMethod(context.Background(), &pb.Request{})
-}
-```
-
-## Examples
+## Complete Examples
 
 The repository includes several complete examples demonstrating different use cases:
 
@@ -220,16 +192,6 @@ go run examples/production-bridge/main.go \
 ### 4. Custom Router (`examples/custom-router`)
 
 **What it demonstrates:** Integrating bridge with existing HTTP server
-
-```mermaid
-graph TB
-    A[HTTP :8080] --> B[/health]
-    A --> C[/metrics]
-    A --> D[/grpc - Bridge 1]
-    A --> E[/api/v2/grpc - Bridge 2]
-    D --> F[gRPC Server :50051]
-    E --> G[gRPC Server :50052]
-```
 
 **Use case:** Adding gRPC-over-WebSocket to an existing HTTP API server
 

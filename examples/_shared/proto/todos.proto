@@ -41,10 +41,45 @@ message DeleteTodoResponse {
   bool success = 1;
 }
 
+// Server Streaming
+message StreamTodosRequest {}
+message StreamTodosResponse {
+  Todo todo = 1;
+}
+
+// Client Streaming
+message BulkCreateRequest {
+  string text = 1;
+}
+message BulkCreateResponse {
+  int32 created_count = 1;
+}
+
+// Bidirectional Streaming
+message SyncRequest {
+  oneof action {
+    CreateTodoRequest create = 1;
+    UpdateTodoRequest update = 2;
+    DeleteTodoRequest delete = 3;
+  }
+}
+message SyncResponse {
+  oneof result {
+    Todo todo = 1;
+    string error = 2;
+  }
+}
+
 // TodoService definition
 service TodoService {
+  // Unary RPCs
   rpc CreateTodo(CreateTodoRequest) returns (CreateTodoResponse);
   rpc ListTodos(ListTodosRequest) returns (ListTodosResponse);
   rpc UpdateTodo(UpdateTodoRequest) returns (UpdateTodoResponse);
   rpc DeleteTodo(DeleteTodoRequest) returns (DeleteTodoResponse);
+  
+  // Streaming RPCs - tests browser HTTP/2 limitations
+  rpc StreamTodos(StreamTodosRequest) returns (stream StreamTodosResponse);
+  rpc BulkCreateTodos(stream BulkCreateRequest) returns (BulkCreateResponse);
+  rpc SyncTodos(stream SyncRequest) returns (stream SyncResponse);
 }
