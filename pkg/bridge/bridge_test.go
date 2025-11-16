@@ -1,18 +1,16 @@
 package bridge
 
 import (
-	"net/http"
 	"testing"
 )
 
-// TestNewHandler_Interface ensures that NewHandler returns an http.Handler.
-func TestNewHandler_Interface(t *testing.T) {
-	// NewHandler should return an http.Handler.
-	// We don't need a real gRPC server for this interface check.
-	var handler http.Handler
-	handler = NewHandler("localhost:50051") // Dummy target address
+// Package-level tests are in separate files:
+// - conn_test.go: Tests for webSocketConn
+// - server_test.go: Tests for ServeHandler and ServerConfig  
+// - client_test.go: Tests for DialOption (non-WASM builds)
 
-	if handler == nil {
-		t.Fatal("NewHandler returned nil, expected an http.Handler implementation")
-	}
+// TestPackage is a placeholder to ensure the test package compiles
+func TestPackage(t *testing.T) {
+	// This package has comprehensive tests in dedicated test files
+	t.Log("Bridge package tests are split across multiple files for better organization")
 }

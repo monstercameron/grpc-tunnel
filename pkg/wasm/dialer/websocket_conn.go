@@ -3,7 +3,6 @@
 package dialer
 
 import (
-	"log"
 	"net"
 	"syscall/js"
 	"time"
@@ -34,16 +33,12 @@ func NewWebSocketConn(webSocket js.Value) net.Conn {
 		event := args[0]
 		data := event.Get("data")
 
-		log.Printf("WASM WebSocket: Received message, data type: %s", data.Type().String())
-
-		// Data from WebSocket can be ArrayBuffer or Blob.
-		// Check if it's an ArrayBuffer
+		// Data from WebSocket can be ArrayBuffer or Blob
 		var byteSlice []byte
 		if data.Type() == js.TypeObject {
-			// Try to convert to Uint8Array
+			// Convert to Uint8Array
 			arrayBuffer := js.Global().Get("Uint8Array").New(data)
 			length := arrayBuffer.Get("length").Int()
-			log.Printf("WASM WebSocket: ArrayBuffer length: %d", length)
 			if length > 0 {
 				byteSlice = make([]byte, length)
 				js.CopyBytesToGo(byteSlice, arrayBuffer)
@@ -52,8 +47,6 @@ func NewWebSocketConn(webSocket js.Value) net.Conn {
 
 		if len(byteSlice) > 0 {
 			connection.readMessageChannel <- byteSlice
-		} else {
-			log.Printf("WASM WebSocket: Received empty or unhandled message")
 		}
 		return nil
 	}))
@@ -81,17 +74,9 @@ func NewWebSocketConn(webSocket js.Value) net.Conn {
 func (webSocketConnection *webSocketConnection) Read(buffer []byte) (int, error) {
 	select {
 	case message := <-webSocketConnection.readMessageChannel:
-		// Copy the received message into the provided buffer.
-		// If the buffer is too small, return an error or partial read.
 		n := copy(buffer, message)
-		if n < len(message) {
-			// Buffer was too small, this is a problem
-			log.Printf("WASM WebSocket: Buffer too small: got %d bytes, buffer size %d", len(message), len(buffer))
-		}
-		log.Printf("WASM WebSocket: Read %d bytes", n)
 		return n, nil
 	case err := <-webSocketConnection.readErrorChannel:
-		log.Printf("WASM WebSocket: Read error: %v", err)
 		return 0, err
 	}
 }
