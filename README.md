@@ -4,11 +4,11 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/monstercameron/grpc-tunnel.svg)](https://pkg.go.dev/github.com/monstercameron/grpc-tunnel)
 [![Go Report Card](https://goreportcard.com/badge/github.com/monstercameron/grpc-tunnel)](https://goreportcard.com/report/github.com/monstercameron/grpc-tunnel)
-[![Build Status](https://github.com/monstercameron/grpc-tunnel/actions/workflows/build.yml/badge.svg)](https://github.com/monstercameron/grpc-tunnel/actions/workflows/build.yml)
-[![Test Status](https://github.com/monstercameron/grpc-tunnel/actions/workflows/test.yml/badge.svg)](https://github.com/monstercameron/grpc-tunnel/actions/workflows/test.yml)
+[![Build](https://github.com/monstercameron/grpc-tunnel/workflows/Build/badge.svg)](https://github.com/monstercameron/grpc-tunnel/actions/workflows/build.yml)
+[![Test](https://github.com/monstercameron/grpc-tunnel/workflows/Test/badge.svg)](https://github.com/monstercameron/grpc-tunnel/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/monstercameron/grpc-tunnel)](https://go.dev/)
-[![Latest Release](https://img.shields.io/github/v/release/monstercameron/grpc-tunnel)](https://github.com/monstercameron/grpc-tunnel/releases)
+[![Release](https://img.shields.io/github/v/tag/monstercameron/grpc-tunnel?label=release)](https://github.com/monstercameron/grpc-tunnel/releases)
 
 ## Why This Exists
 
