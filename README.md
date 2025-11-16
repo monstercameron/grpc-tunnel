@@ -329,18 +329,6 @@ GOOS=js GOARCH=wasm go build -o app.wasm
 
 ---
 
-## 🔥 Ready to Build Something Amazing?
-
-### [⭐ Star this repo](https://github.com/monstercameron/GoGRPCBridge) to stay updated
-
-### [📖 Explore Full Examples](./examples/) - Production-ready code for every use case
-
-### [💬 Join Discussions](https://github.com/monstercameron/GoGRPCBridge/discussions) - Get help and share your projects
-
-### [🐛 Report Issues](https://github.com/monstercameron/GoGRPCBridge/issues) - Help us improve
-
----
-
 ## 🏗️ Production Examples
 
 The `examples/` directory contains complete, runnable applications demonstrating real-world usage:
@@ -534,6 +522,10 @@ sequenceDiagram
 | **Tooling** | ⚠️ | Can't use `grpcurl` or `grpcui` directly on bridge endpoint |
 
 ---
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow, testing guidelines, and security scan details.
 
 ## License
 

@@ -88,7 +88,7 @@ The `-fuzz` flag must match exactly ONE fuzz function.
 When you push to `main`, GitHub Actions runs:
 
 1. **Lint** - `golangci-lint` with `.golangci.yml` config
-2. **Test** - Unit tests with race detector (Go 1.24.x and 1.23.x)
+2. **Test** - Unit tests with race detector (Go 1.24.x)
 3. **Edge Tests** - Edge case scenarios
 4. **Fuzz Tests** - Each fuzzer runs for 5 seconds
 5. **E2E Tests** - End-to-end browser tests with Playwright
