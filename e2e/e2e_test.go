@@ -80,9 +80,10 @@ func TestCreateTodoEndToEnd(t *testing.T) {
 	// --- 2. Setup Phase ---
 	t.Log("Starting backend services...")
 
-	// Start bridge server (now serves gRPC directly over WebSocket)
-	bridgePath := filepath.Join(projectRoot, "bin", "bridge")
-	bridgeCleanup := startCommand(t, projectRoot, "Bridge", bridgePath, "--listen", ":8080")
+	// Start direct-bridge example (serves gRPC directly over WebSocket)
+	// This uses the bridge library to serve gRPC over WebSocket
+	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
+	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
 
 	// Start file server for the public directory
