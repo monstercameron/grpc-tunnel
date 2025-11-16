@@ -16,11 +16,11 @@ func TestWebSocketConn_NetConnInterface(t *testing.T) {
 	// This test primarily checks the interface compliance.
 
 	// Create a mock js.Value that has the methods expected by NewWebSocketConn.
-	// In a real WASM environment, this would be js.Global().Get("WebSocket").New(url).
+	// In a real WASM environment, this would be js.Global().Get(jsGlobalWebSocket).New(url).
 	mockBrowserWebSocket := js.ValueOf(map[string]interface{}{
-		"readyState": js.ValueOf(1), // CONNECTING or OPEN
-		"send":       js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
-		"close":      js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
+		jsPropertyReadyState: js.ValueOf(1), // CONNECTING or OPEN
+		jsMethodSend:         js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
+		jsMethodClose:        js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
 	})
 
 	// Attempt to create a WebSocketConn from the mock.

@@ -56,11 +56,11 @@ func TestNewWebSocketDialer_NoWebSocketGlobal(t *testing.T) {
 // TestBrowserWebSocketAddr_Interface tests the browserWebSocketAddr implementation
 func TestBrowserWebSocketAddr_Interface(t *testing.T) {
 	websocketAddress := &browserWebSocketAddr{
-		networkType:   "websocket",
+		networkType:   networkTypeWebSocket,
 		addressString: "test-address",
 	}
 
-	if websocketAddress.Network() != "websocket" {
+	if websocketAddress.Network() != networkTypeWebSocket {
 		t.Errorf("Network() = %s, want websocket", websocketAddress.Network())
 	}
 
@@ -102,7 +102,7 @@ func TestNewBrowserWebSocketDialer_ContextCancellation(t *testing.T) {
 
 // TestNewBrowserWebSocketDialer_Timeout tests dial timeout
 func TestNewBrowserWebSocketDialer_Timeout(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
@@ -121,7 +121,7 @@ func TestNewBrowserWebSocketDialer_Timeout(t *testing.T) {
 
 // TestNew_Integration tests the option can be used with gRPC
 func TestNew_Integration(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
@@ -140,13 +140,13 @@ func TestNew_Integration(t *testing.T) {
 
 // TestBrowserWebSocketConnection_Channels tests channel initialization
 func TestBrowserWebSocketConnection_Channels(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
 	// Create a mock WebSocket value
-	mockBrowserWebSocket := js.Global().Get("Object").New()
-	mockBrowserWebSocket.Set("readyState", 1) // OPEN
+	mockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
+	mockBrowserWebSocket.Set(jsPropertyReadyState, 1) // OPEN
 
 	networkConnection := NewWebSocketConn(mockBrowserWebSocket).(*browserWebSocketConnection)
 
@@ -165,11 +165,11 @@ func TestBrowserWebSocketConnection_Channels(t *testing.T) {
 
 // TestBrowserWebSocketConnection_LocalAddr tests LocalAddr method
 func TestBrowserWebSocketConnection_LocalAddr(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockBrowserWebSocket := js.Global().Get("Object").New()
+	mockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
 	localAddress := networkConnection.LocalAddr()
@@ -177,18 +177,18 @@ func TestBrowserWebSocketConnection_LocalAddr(t *testing.T) {
 		t.Error("LocalAddr() returned nil")
 	}
 
-	if localAddress.Network() != "websocket" {
+	if localAddress.Network() != networkTypeWebSocket {
 		t.Errorf("LocalAddr().Network() = %s, want websocket", localAddress.Network())
 	}
 }
 
 // TestBrowserWebSocketConnection_RemoteAddr tests RemoteAddr method
 func TestBrowserWebSocketConnection_RemoteAddr(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockBrowserWebSocket := js.Global().Get("Object").New()
+	mockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
 	remoteAddress := networkConnection.RemoteAddr()
@@ -196,18 +196,18 @@ func TestBrowserWebSocketConnection_RemoteAddr(t *testing.T) {
 		t.Error("RemoteAddr() returned nil")
 	}
 
-	if remoteAddress.Network() != "websocket" {
+	if remoteAddress.Network() != networkTypeWebSocket {
 		t.Errorf("RemoteAddr().Network() = %s, want websocket", remoteAddress.Network())
 	}
 }
 
 // TestBrowserWebSocketConnection_Deadlines tests deadline methods
 func TestBrowserWebSocketConnection_Deadlines(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
-	mockBrowserWebSocket := js.Global().Get("Object").New()
+	mockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	networkConnection := NewWebSocketConn(mockBrowserWebSocket)
 
 	currentTime := time.Now()
@@ -229,13 +229,13 @@ func TestBrowserWebSocketConnection_Deadlines(t *testing.T) {
 
 // TestBrowserWebSocketConnection_Close tests Close method
 func TestBrowserWebSocketConnection_Close(t *testing.T) {
-	if !js.Global().Get("WebSocket").Truthy() {
+	if !js.Global().Get(jsGlobalWebSocket).Truthy() {
 		t.Skip("WebSocket not available in test environment")
 	}
 
 	closeMethodCalled := false
-	mockBrowserWebSocket := js.Global().Get("Object").New()
-	mockBrowserWebSocket.Set("close", js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} {
+	mockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
+	mockBrowserWebSocket.Set(jsMethodClose, js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} {
 		closeMethodCalled = true
 		return nil
 	}))
