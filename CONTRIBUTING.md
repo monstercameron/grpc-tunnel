@@ -57,12 +57,31 @@ make test-short
 # Fuzz tests (1 minute each)
 make fuzz
 
+# Quick fuzz validation (5 seconds each) - same as CI
+make fuzz-quick
+
+# Run specific fuzz test
+go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=60s
+
 # E2E tests (requires Playwright)
 make e2e
 
 # Run specific test
 go test ./pkg/bridge -v -run TestWebSocketConn
 ```
+
+### Important: Fuzz Test Usage
+
+**❌ Don't use:** `go test ./pkg/bridge -fuzz=. -fuzztime=10s`
+
+This will fail with: `testing: will not fuzz, -fuzz matches more than one fuzz test`
+
+**✅ Instead use:**
+- `make fuzz` - Runs each fuzzer individually for 1 minute
+- `make fuzz-quick` - Quick validation (5s each, same as CI)
+- Individual fuzzer: `go test ./pkg/bridge -fuzz=FuzzWebSocketConnWrite -fuzztime=60s`
+
+The `-fuzz` flag must match exactly ONE fuzz function.
 
 ## CI/CD Pipeline
 

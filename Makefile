@@ -32,10 +32,21 @@ install-hooks: ## Install git pre-commit hooks
 	@echo "✅ Pre-commit hooks installed"
 
 fuzz: ## Run fuzz tests for 1 minute each
+	@echo "Running FuzzWebSocketConnWrite..."
 	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=60s
+	@echo "Running FuzzWebSocketConnRead..."
 	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnRead -fuzztime=60s
+	@echo "Running FuzzBinaryMessage..."
 	go test ./pkg/bridge -v -fuzz=FuzzBinaryMessage -fuzztime=60s
+	@echo "Running FuzzMessageSizes..."
 	go test ./pkg/bridge -v -fuzz=FuzzMessageSizes -fuzztime=60s
+
+fuzz-quick: ## Run fuzz tests quickly (5s each) for CI/validation
+	@echo "Quick fuzz validation..."
+	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=5s
+	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnRead -fuzztime=5s
+	go test ./pkg/bridge -v -fuzz=FuzzBinaryMessage -fuzztime=5s
+	go test ./pkg/bridge -v -fuzz=FuzzMessageSizes -fuzztime=5s
 
 e2e: ## Run end-to-end tests
 	go test ./e2e/... -v -timeout 5m
