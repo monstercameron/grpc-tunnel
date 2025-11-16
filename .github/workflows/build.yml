@@ -9,11 +9,7 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: ['1.24.x']
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout code
@@ -22,7 +18,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: '1.24.x'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -30,36 +26,25 @@ jobs:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-1.24.x-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
+          ${{ runner.os }}-go-1.24.x-
 
     - name: Download dependencies
       run: go mod download
 
     - name: Build direct bridge example
-      run: go build -v -o bin/direct-bridge${{ runner.os == 'Windows' && '.exe' || '' }} ./examples/direct-bridge
+      run: go build -v -o bin/direct-bridge ./examples/direct-bridge
 
     - name: Build gRPC server example
-      run: go build -v -o bin/grpc-server${{ runner.os == 'Windows' && '.exe' || '' }} ./examples/grpc-server
+      run: go build -v -o bin/grpc-server ./examples/grpc-server
 
-    - name: Build WASM client (Linux/macOS)
-      if: runner.os != 'Windows'
+    - name: Build WASM client
       run: |
         cd examples/wasm-client
         GOOS=js GOARCH=wasm go build -o ../../public/main.wasm .
 
-    - name: Build WASM client (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        cd examples/wasm-client
-        $env:GOOS = "js"
-        $env:GOARCH = "wasm"
-        go build -o ../../public/main.wasm .
-
     - name: Verify binaries exist
-      shell: bash
       run: |
         ls -la bin/
         ls -la public/ || true
@@ -67,7 +52,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: binaries-${{ matrix.os }}-go${{ matrix.go-version }}
+        name: binaries-ubuntu-go1.24.x
         path: |
           bin/*
           public/main.wasm

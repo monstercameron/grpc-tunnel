@@ -33,35 +33,14 @@ jobs:
         # Create output directory
         mkdir -p dist
         
-        # Build for multiple platforms
-        platforms=(
-          "linux/amd64"
-          "linux/arm64"
-          "darwin/amd64"
-          "darwin/arm64"
-          "windows/amd64"
-        )
+        # Build examples for Linux (library is platform-agnostic)
+        echo "Building examples..."
         
-        for platform in "${platforms[@]}"; do
-          os="${platform%/*}"
-          arch="${platform#*/}"
-          
-          output_bridge="dist/grpc-tunnel-bridge-${os}-${arch}"
-          output_server="dist/grpc-tunnel-server-${os}-${arch}"
-          
-          if [ "$os" = "windows" ]; then
-            output_bridge="${output_bridge}.exe"
-            output_server="${output_server}.exe"
-          fi
-          
-          echo "Building for $os/$arch..."
-          
-          GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
-            -o "$output_bridge" ./examples/direct-bridge
-          
-          GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
-            -o "$output_server" ./examples/grpc-server
-        done
+        go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
+          -o "dist/grpc-tunnel-bridge" ./examples/direct-bridge
+        
+        go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
+          -o "dist/grpc-tunnel-server" ./examples/grpc-server
         
         # Build WASM client
         cd examples/wasm-client
@@ -70,15 +49,7 @@ jobs:
         
         # Create archives
         cd dist
-        for file in grpc-tunnel-*; do
-          if [[ $file == *.exe ]]; then
-            zip "${file%.exe}.zip" "$file"
-          else
-            tar czf "${file}.tar.gz" "$file"
-          fi
-        done
-        
-        # Archive WASM
+        tar czf grpc-tunnel-examples.tar.gz grpc-tunnel-bridge grpc-tunnel-server
         tar czf grpc-tunnel-wasm.tar.gz main.wasm
 
     - name: Generate changelog
@@ -98,43 +69,34 @@ jobs:
           
           ## Installation
           
-          Download the appropriate binary for your platform:
-          - Linux (amd64/arm64)
-          - macOS (amd64/arm64)
-          - Windows (amd64)
+          This is a **Go library** for gRPC-over-WebSocket. Import it in your project:
           
-          ### Bridge Server
-          ```bash
-          # Linux/macOS
-          tar xzf grpc-tunnel-bridge-<os>-<arch>.tar.gz
-          chmod +x grpc-tunnel-bridge-<os>-<arch>
-          ./grpc-tunnel-bridge-<os>-<arch>
-          
-          # Windows
-          unzip grpc-tunnel-bridge-windows-amd64.zip
-          grpc-tunnel-bridge-windows-amd64.exe
+          ```go
+          import "github.com/monstercameron/grpc-tunnel/pkg/bridge"
           ```
           
-          ### gRPC Server
-          ```bash
-          # Linux/macOS
-          tar xzf grpc-tunnel-server-<os>-<arch>.tar.gz
-          chmod +x grpc-tunnel-server-<os>-<arch>
-          ./grpc-tunnel-server-<os>-<arch>
+          ### Example Binaries (Linux)
           
-          # Windows
-          unzip grpc-tunnel-server-windows-amd64.zip
-          grpc-tunnel-server-windows-amd64.exe
+          Download example implementations:
+          
+          ```bash
+          # Download and extract examples
+          tar xzf grpc-tunnel-examples.tar.gz
+          
+          # Run bridge server
+          ./grpc-tunnel-bridge
+          
+          # Run gRPC server
+          ./grpc-tunnel-server
           ```
           
-          ### WASM Client
+          ### WASM Client Example
           ```bash
           tar xzf grpc-tunnel-wasm.tar.gz
           # Deploy main.wasm with your web application
           ```
         files: |
           dist/*.tar.gz
-          dist/*.zip
         draft: false
         prerelease: false
 
