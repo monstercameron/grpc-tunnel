@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,17 +158,17 @@ func TestWrap_WithOptions(t *testing.T) {
 	proto.RegisterTodoServiceServer(grpcServer, &mockService{})
 	defer grpcServer.Stop()
 
-	connectCalled := false
-	disconnectCalled := false
+	var connectCalled atomic.Bool
+	var disconnectCalled atomic.Bool
 
 	handler := Wrap(grpcServer,
 		WithOriginCheck(func(r *http.Request) bool { return true }),
 		WithBufferSizes(8192, 8192),
 		WithConnectHook(func(r *http.Request) {
-			connectCalled = true
+			connectCalled.Store(true)
 		}),
 		WithDisconnectHook(func(r *http.Request) {
-			disconnectCalled = true
+			disconnectCalled.Store(true)
 		}),
 	)
 
@@ -190,11 +191,11 @@ func TestWrap_WithOptions(t *testing.T) {
 	conn.Close()
 	time.Sleep(100 * time.Millisecond)
 
-	if !connectCalled {
+	if !connectCalled.Load() {
 		t.Error("Connect hook not called")
 	}
 
-	if !disconnectCalled {
+	if !disconnectCalled.Load() {
 		t.Error("Disconnect hook not called")
 	}
 }
