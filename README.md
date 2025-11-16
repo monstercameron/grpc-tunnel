@@ -88,6 +88,11 @@ client := proto.NewYourServiceClient(conn)
 ```go
 import "github.com/monstercameron/grpc-tunnel/pkg/grpctunnel"
 
+// Automatic: Uses current page's host (https://example.com -> wss://example.com)
+conn, _ := grpctunnel.Dial("",
+    grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+// Or explicit URL:
 conn, _ := grpctunnel.Dial("ws://localhost:8080",
     grpc.WithTransportCredentials(insecure.NewCredentials()))
 client := proto.NewYourServiceClient(conn)
