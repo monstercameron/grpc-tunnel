@@ -37,24 +37,26 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
-    - name: Build bridge server
-      run: go build -v -o bin/bridge${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/bridge
+    - name: Build direct bridge example
+      run: go build -v -o bin/direct-bridge${{ runner.os == 'Windows' && '.exe' || '' }} ./examples/direct-bridge
 
-    - name: Build example server
-      run: go build -v -o bin/server${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/server
+    - name: Build gRPC server example
+      run: go build -v -o bin/grpc-server${{ runner.os == 'Windows' && '.exe' || '' }} ./examples/grpc-server
 
     - name: Build WASM client (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
-        GOOS=js GOARCH=wasm go build -o public/main.wasm ./client
+        cd examples/wasm-client
+        GOOS=js GOARCH=wasm go build -o ../../public/main.wasm .
 
     - name: Build WASM client (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        cd examples/wasm-client
         $env:GOOS = "js"
         $env:GOARCH = "wasm"
-        go build -o public/main.wasm ./client
+        go build -o ../../public/main.wasm .
 
     - name: Verify binaries exist
       shell: bash
@@ -71,35 +73,5 @@ jobs:
           public/main.wasm
         retention-days: 7
 
-  build-docker:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build bridge image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile.bridge
-        push: false
-        tags: grpc-tunnel/bridge:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-      continue-on-error: true
-
-    - name: Build server image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile.server
-        push: false
-        tags: grpc-tunnel/server:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-      continue-on-error: true
+  # Skipping Docker build - no Dockerfiles present in repository
+  # Add Dockerfiles if needed for containerized deployments
