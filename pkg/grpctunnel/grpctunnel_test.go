@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"grpc-tunnel/examples/_shared/proto"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"grpc-tunnel/examples/_shared/helpers"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/helpers"
 )
 
 type customLogger struct{}

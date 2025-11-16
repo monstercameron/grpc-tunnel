@@ -7,8 +7,8 @@ toolchain go1.24.10
 replace grpc-tunnel => ../../
 
 require (
+	github.com/monstercameron/GoGRPCBridge v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.76.0
-	grpc-tunnel v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -18,3 +18,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
+
+replace github.com/monstercameron/GoGRPCBridge => ../../

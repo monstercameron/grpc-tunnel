@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"grpc-tunnel/pkg/wasm/dialer"
+	"github.com/monstercameron/GoGRPCBridge/pkg/wasm/dialer"
 
 	"google.golang.org/grpc"
 )

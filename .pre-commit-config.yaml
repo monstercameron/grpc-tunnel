@@ -1,4 +1,4 @@
-# Pre-commit hooks for grpc-tunnel
+# Pre-commit hooks for GoGRPCBridge
 
 repos:
   - repo: https://github.com/golangci/golangci-lint

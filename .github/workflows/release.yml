@@ -49,8 +49,8 @@ jobs:
         
         # Create archives
         cd dist
-        tar czf grpc-tunnel-examples.tar.gz grpc-tunnel-bridge grpc-tunnel-server
-        tar czf grpc-tunnel-wasm.tar.gz main.wasm
+        tar czf GoGRPCBridge-examples.tar.gz GoGRPCBridge-bridge GoGRPCBridge-server
+        tar czf GoGRPCBridge-wasm.tar.gz main.wasm
 
     - name: Generate changelog
       id: changelog

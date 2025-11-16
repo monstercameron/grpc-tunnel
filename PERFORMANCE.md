@@ -5,7 +5,7 @@
 **Date:** 2024-01-XX  
 **Status:** ✅ **CRITICAL ISSUES FIXED**
 
-This document outlines the performance and memory leak analysis conducted on the grpc-tunnel codebase, identifying critical issues and their resolutions.
+This document outlines the performance and memory leak analysis conducted on the GoGRPCBridge codebase, identifying critical issues and their resolutions.
 
 ---
 

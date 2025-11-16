@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"grpc-tunnel/examples/_shared/helpers"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/helpers"
 )
 
 func main() {

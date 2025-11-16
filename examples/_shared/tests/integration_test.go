@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"grpc-tunnel/examples/_shared/helpers"
-	"grpc-tunnel/examples/_shared/proto"
-	"grpc-tunnel/pkg/bridge"
-	"grpc-tunnel/pkg/grpctunnel"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/helpers"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
+	"github.com/monstercameron/GoGRPCBridge/pkg/bridge"
+	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

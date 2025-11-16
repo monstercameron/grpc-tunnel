@@ -4,8 +4,8 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/monstercameron/grpc-tunnel.git
-cd grpc-tunnel
+git clone https://github.com/monstercameron/GoGRPCBridge.git
+cd GoGRPCBridge
 
 # Install golangci-lint (if not already installed)
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

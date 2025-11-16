@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"grpc-tunnel/examples/_shared/proto" // Our generated protobuf code
-	"grpc-tunnel/pkg/wasm/dialer"        // Our new WASM dialer library
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
+	"github.com/monstercameron/GoGRPCBridge/pkg/wasm/dialer"
 )
 
 func main() {

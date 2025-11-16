@@ -13,8 +13,8 @@ import (
 	"os"
 	"sync"
 
-	"grpc-tunnel/examples/_shared/proto"
-	"grpc-tunnel/pkg/grpctunnel"
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
+	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"

@@ -8,7 +8,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 
-	"grpc-tunnel/pkg/bridge"
+	"github.com/monstercameron/GoGRPCBridge/pkg/bridge"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/http2"

@@ -849,7 +849,7 @@ const file_todos_proto_rawDesc = "" +
 	"DeleteTodo\x12\x12.DeleteTodoRequest\x1a\x13.DeleteTodoResponse\x12:\n" +
 	"\vStreamTodos\x12\x13.StreamTodosRequest\x1a\x14.StreamTodosResponse0\x01\x12<\n" +
 	"\x0fBulkCreateTodos\x12\x12.BulkCreateRequest\x1a\x13.BulkCreateResponse(\x01\x12,\n" +
-	"\tSyncTodos\x12\f.SyncRequest\x1a\r.SyncResponse(\x010\x01B$Z\"grpc-tunnel/examples/_shared/protob\x06proto3"
+	"\tSyncTodos\x12\f.SyncRequest\x1a\r.SyncResponse(\x010\x01B?Z=github.com/monstercameron/GoGRPCBridge/examples/_shared/protob\x06proto3"
 
 var (
 	file_todos_proto_rawDescOnce sync.Once

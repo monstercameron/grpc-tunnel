@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 
-	"grpc-tunnel/examples/_shared/proto" // Adjust to your module path
+	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto" // Adjust to your module path
 )
 
 // loadTodos reads from ../_shared/data/todos.json
