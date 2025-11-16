@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"grpc-tunnel/pkg/wasm/dialer" // Our new WASM dialer library
-	"grpc-tunnel/proto"            // Our generated protobuf code
+	"grpc-tunnel/examples/_shared/proto"            // Our generated protobuf code
 )
 
 func main() {

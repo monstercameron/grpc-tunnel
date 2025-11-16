@@ -20,12 +20,12 @@ coverage.txt
 *.coverprofile
 
 # WASM builds (generated)
-public/client.wasm
-public/*.wasm
+examples/_shared/public/client.wasm
+examples/_shared/public/*.wasm
 *.wasm
 
 # Runtime data
-data/
+examples/_shared/data/
 *.json
 !go.json
 !go.sum

@@ -242,12 +242,12 @@ go run examples/custom-router/main.go
 **Build & Run:**
 ```bash
 # Build WASM
-./build.sh
+cd examples/wasm-client && bash build.sh
 
 # Start server (any of the bridge examples)
 go run examples/direct-bridge/main.go
 
-# Open browser to public/index.html
+# Open browser to examples/_shared/public/index.html
 ```
 
 ### 6. Standalone gRPC Server (`examples/grpc-server`)

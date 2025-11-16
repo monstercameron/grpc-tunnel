@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"grpc-tunnel/pkg/bridge"
-	"grpc-tunnel/proto"
+	"grpc-tunnel/examples/_shared/proto"
 )
 
 // TodoServer implementation
@@ -26,10 +26,10 @@ type todoServer struct {
 }
 
 func loadTodos() ([]*proto.Todo, error) {
-	const filePath = "./data/todos.json"
+	const filePath = "../_shared/data/todos.json"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		// Create data directory if it doesn't exist
-		if err := os.MkdirAll("./data", 0755); err != nil {
+		if err := os.MkdirAll("../_shared/data", 0755); err != nil {
 			return nil, fmt.Errorf("failed to create data directory: %w", err)
 		}
 		if err := ioutil.WriteFile(filePath, []byte("[]"), 0644); err != nil {
@@ -52,7 +52,7 @@ func loadTodos() ([]*proto.Todo, error) {
 }
 
 func saveTodos(todosSlice []*proto.Todo) error {
-	const filePath = "./data/todos.json"
+	const filePath = "../_shared/data/todos.json"
 	out, err := json.MarshalIndent(todosSlice, "", "  ")
 	if err != nil {
 		return err

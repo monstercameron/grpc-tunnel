@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc"
 
 
-	"grpc-tunnel/proto"        // Adjust to your module path
+	"grpc-tunnel/examples/_shared/proto"        // Adjust to your module path
 )
 
-// loadTodos reads from ./data/proto.json
+// loadTodos reads from ../_shared/data/todos.json
 func loadTodos() ([]*proto.Todo, error) {
-	const filePath = "./data/todos.json"
+	const filePath = "../_shared/data/todos.json"
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		log.Printf("No proto.json found; creating new at %s\n", filePath)
@@ -45,9 +45,9 @@ func loadTodos() ([]*proto.Todo, error) {
 	return ts, nil
 }
 
-// saveTodos writes the in-memory slice back to ./data/proto.json
+// saveTodos writes the in-memory slice back to ../_shared/data/todos.json
 func saveTodos(todosSlice []*proto.Todo) error {
-	const filePath = "./data/todos.json"
+	const filePath = "../_shared/data/todos.json"
 	out, err := json.MarshalIndent(todosSlice, "", "  ")
 	if err != nil {
 		return err

@@ -98,7 +98,7 @@ func TestCreateTodoEndToEnd(t *testing.T) {
 
 	// --- 1. Build Phase ---
 	t.Log("Building all components...")
-	buildCmd := exec.Command("bash", "build.sh")
+	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
 	buildCmd.Dir = projectRoot // Run build.sh from the project root
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
@@ -116,7 +116,7 @@ func TestCreateTodoEndToEnd(t *testing.T) {
 	t.Cleanup(bridgeCleanup)
 
 	// Start file server for the public directory
-	publicDir := http.Dir(filepath.Join(projectRoot, "public"))
+	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
 	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
 	go func() {
 		if err := fileServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -189,12 +189,12 @@ testSuccess:
 func TestMultipleSequentialRequests(t *testing.T) {
 	projectRoot, err := filepath.Abs("..")
 	if err != nil {
-		t.Fatalf("Failed to get project root directory: %v", err)
+		t.Fatalf("Failed to get project root: %v", err)
 	}
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", "build.sh")
+	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
@@ -271,12 +271,12 @@ func TestMultipleSequentialRequests(t *testing.T) {
 func TestConnectionResilience(t *testing.T) {
 	projectRoot, err := filepath.Abs("..")
 	if err != nil {
-		t.Fatalf("Failed to get project root directory: %v", err)
+		t.Fatalf("Failed to get project root: %v", err)
 	}
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", "build.sh")
+	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
@@ -380,7 +380,7 @@ func TestConcurrentConnections(t *testing.T) {
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", "build.sh")
+	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
@@ -491,12 +491,12 @@ func TestConcurrentConnections(t *testing.T) {
 func TestLargePayload(t *testing.T) {
 	projectRoot, err := filepath.Abs("..")
 	if err != nil {
-		t.Fatalf("Failed to get project root directory: %v", err)
+		t.Fatalf("Failed to get project root: %v", err)
 	}
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", "build.sh")
+	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))

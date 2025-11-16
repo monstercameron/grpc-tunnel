@@ -12,7 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"grpc-tunnel/proto"
+	"grpc-tunnel/examples/_shared/proto"
 )
 
 // mockTodoService implements a simple in-memory TodoService for testing

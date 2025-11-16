@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "grpc-tunnel/proto";
+option go_package = "grpc-tunnel/examples/_shared/proto";
 
 // A single Todo item.
 message Todo {
