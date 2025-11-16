@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build and Test
     runs-on: ubuntu-latest
     
     steps:
@@ -33,30 +33,11 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
-    - name: Build direct bridge example
-      run: go build -v -o bin/direct-bridge ./examples/direct-bridge
+    - name: Run tests
+      run: go test ./pkg/... -v -race -coverprofile=coverage.txt
 
-    - name: Build gRPC server example
-      run: go build -v -o bin/grpc-server ./examples/grpc-server
-
-    - name: Build WASM client
+    - name: Verify examples compile
       run: |
-        cd examples/wasm-client
-        GOOS=js GOARCH=wasm go build -o ../../public/main.wasm .
-
-    - name: Verify binaries exist
-      run: |
-        ls -la bin/
-        ls -la public/ || true
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: binaries-ubuntu-go1.24.x
-        path: |
-          bin/*
-          public/main.wasm
-        retention-days: 7
-
-  # Skipping Docker build - no Dockerfiles present in repository
-  # Add Dockerfiles if needed for containerized deployments
+        go build -v ./examples/direct-bridge
+        go build -v ./examples/grpc-server
+        cd examples/wasm-client && GOOS=js GOARCH=wasm go build -v .

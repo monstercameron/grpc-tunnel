@@ -1,0 +1,89 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  auto-release:
+    name: Auto Increment Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get latest tag
+      id: get_latest_tag
+      run: |
+        # Get the latest tag, or default to v0.0.0 if no tags exist
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_OUTPUT
+        echo "Latest tag: $LATEST_TAG"
+
+    - name: Calculate next version
+      id: next_version
+      run: |
+        LATEST="${{ steps.get_latest_tag.outputs.LATEST_TAG }}"
+        # Remove 'v' prefix
+        VERSION=${LATEST#v}
+        
+        # Split version into parts
+        IFS='.' read -r -a parts <<< "$VERSION"
+        MAJOR=${parts[0]}
+        MINOR=${parts[1]}
+        PATCH=${parts[2]}
+        
+        # Increment patch version
+        PATCH=$((PATCH + 1))
+        
+        NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Next version: $NEW_VERSION"
+
+    - name: Check if new commits since last tag
+      id: check_commits
+      run: |
+        LATEST_TAG="${{ steps.get_latest_tag.outputs.LATEST_TAG }}"
+        if [ "$LATEST_TAG" = "v0.0.0" ]; then
+          echo "HAS_NEW_COMMITS=true" >> $GITHUB_OUTPUT
+          echo "No tags exist, will create first release"
+        else
+          # Count commits since last tag
+          COMMIT_COUNT=$(git rev-list ${LATEST_TAG}..HEAD --count)
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
+            echo "HAS_NEW_COMMITS=true" >> $GITHUB_OUTPUT
+            echo "Found $COMMIT_COUNT new commits since last tag"
+          else
+            echo "HAS_NEW_COMMITS=false" >> $GITHUB_OUTPUT
+            echo "No new commits since last tag"
+          fi
+        fi
+
+    - name: Create and push new tag
+      if: steps.check_commits.outputs.HAS_NEW_COMMITS == 'true'
+      run: |
+        NEW_VERSION="${{ steps.next_version.outputs.NEW_VERSION }}"
+        
+        # Configure git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Create annotated tag
+        git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+        
+        # Push tag to trigger release workflow
+        git push origin "$NEW_VERSION"
+        
+        echo "✅ Created and pushed tag: $NEW_VERSION"
+
+    - name: Skip release
+      if: steps.check_commits.outputs.HAS_NEW_COMMITS == 'false'
+      run: echo "⏭️ No new commits since last release, skipping auto-release"
