@@ -63,21 +63,34 @@ The library wraps WebSocket as `net.Conn`, so gRPC thinks it's talking over a no
 go get github.com/monstercameron/grpc-tunnel
 ```
 
-### Server (3 lines)
+### Server (1 line)
 
 ```go
+import "github.com/monstercameron/grpc-tunnel/pkg/grpctunnel"
+
 grpcServer := grpc.NewServer()
-pb.RegisterYourServiceServer(grpcServer, &yourImpl{})
-http.Handle("/", bridge.ServeHandler(bridge.ServerConfig{GRPCServer: grpcServer}))
+proto.RegisterYourServiceServer(grpcServer, &yourImpl{})
+grpctunnel.ListenAndServe(":8080", grpcServer)
 ```
 
-### Browser Client (WASM)
+### Client (Native Go)
 
 ```go
-conn, _ := grpc.Dial("localhost:8080",
-    dialer.New("ws://localhost:8080"),
+import "github.com/monstercameron/grpc-tunnel/pkg/grpctunnel"
+
+conn, _ := grpctunnel.Dial("localhost:8080",
     grpc.WithTransportCredentials(insecure.NewCredentials()))
-client := pb.NewYourServiceClient(conn)
+client := proto.NewYourServiceClient(conn)
+```
+
+### Client (Browser WASM)
+
+```go
+import "github.com/monstercameron/grpc-tunnel/pkg/grpctunnel"
+
+conn, _ := grpctunnel.Dial("ws://localhost:8080",
+    grpc.WithTransportCredentials(insecure.NewCredentials()))
+client := proto.NewYourServiceClient(conn)
 ```
 
 That's it. Full gRPC in browsers.

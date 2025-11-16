@@ -7,13 +7,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"sync"
 
-	"grpc-tunnel/examples/_shared/helpers"
 	"grpc-tunnel/examples/_shared/proto"
+	"grpc-tunnel/pkg/grpctunnel"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -132,23 +131,14 @@ func main() {
 	grpcServer := grpc.NewServer()
 	proto.RegisterTodoServiceServer(grpcServer, srv)
 
-	// Serve gRPC directly over WebSocket
-	http.Handle("/", helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
-		OnConnect: func(r *http.Request) {
-			log.Printf("Client connected: %s", r.RemoteAddr)
-		},
-		OnDisconnect: func(r *http.Request) {
-			log.Printf("Client disconnected: %s", r.RemoteAddr)
-		},
-	}))
-
+	// One-liner: Serve gRPC over WebSocket
 	log.Println("Direct gRPC-over-WebSocket server listening on :5000")
-
-	// Create listener with SO_REUSEADDR to avoid "address already in use" errors
-	listener, err := net.Listen("tcp", ":5000")
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Fatal(http.Serve(listener, nil))
+	log.Fatal(grpctunnel.ListenAndServe(":5000", grpcServer,
+		grpctunnel.WithConnectHook(func(r *http.Request) {
+			log.Printf("Client connected: %s", r.RemoteAddr)
+		}),
+		grpctunnel.WithDisconnectHook(func(r *http.Request) {
+			log.Printf("Client disconnected: %s", r.RemoteAddr)
+		}),
+	))
 }

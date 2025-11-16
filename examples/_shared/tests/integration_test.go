@@ -14,6 +14,7 @@ import (
 	"grpc-tunnel/examples/_shared/helpers"
 	"grpc-tunnel/examples/_shared/proto"
 	"grpc-tunnel/pkg/bridge"
+	"grpc-tunnel/pkg/grpctunnel"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -809,4 +810,87 @@ func TestIntegration_Backpressure(t *testing.T) {
 	}
 
 	t.Log("Backpressure test passed - slow receiver handled correctly")
+}
+
+// TestIntegration_GrpcTunnel_ServerStreaming tests new grpctunnel API with server streaming
+func TestIntegration_GrpcTunnel_ServerStreaming(t *testing.T) {
+	grpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
+	defer grpcServer.Stop()
+
+	// Use new grpctunnel.Wrap API
+	handler := grpctunnel.Wrap(grpcServer)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	wsURL := "ws" + server.URL[4:]
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Use new grpctunnel.Dial API
+	conn, err := grpctunnel.DialContext(ctx, wsURL,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("grpctunnel.Dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewTodoServiceClient(conn)
+	stream, err := client.StreamTodos(ctx, &proto.StreamTodosRequest{})
+	if err != nil {
+		t.Fatalf("StreamTodos failed: %v", err)
+	}
+
+	count := 0
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Recv failed: %v", err)
+		}
+		count++
+	}
+
+	if count != 3 {
+		t.Errorf("Expected 3 todos, got %d", count)
+	}
+}
+
+// TestIntegration_GrpcTunnel_Unary tests new grpctunnel API with unary calls
+func TestIntegration_GrpcTunnel_Unary(t *testing.T) {
+	grpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
+	defer grpcServer.Stop()
+
+	handler := grpctunnel.Wrap(grpcServer)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	wsURL := "ws" + server.URL[4:]
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := grpctunnel.Dial(wsURL,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("grpctunnel.Dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewTodoServiceClient(conn)
+	
+	resp, err := client.CreateTodo(ctx, &proto.CreateTodoRequest{Text: "Test with grpctunnel"})
+	if err != nil {
+		t.Fatalf("CreateTodo failed: %v", err)
+	}
+
+	if resp.GetTodo().GetText() != "Test with grpctunnel" {
+		t.Errorf("Expected 'Test with grpctunnel', got '%s'", resp.GetTodo().GetText())
+	}
 }
