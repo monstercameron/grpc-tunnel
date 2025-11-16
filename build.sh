@@ -1,68 +1,30 @@
 #!/bin/bash
+
 set -e
 
-SERVER_DIR="./server"
-CLIENT_DIR="./client"
-BIN_DIR="./bin"
-PUBLIC_DIR="./public"
+export GO111MODULE=on
 
-DEBUG_MODE=false
+echo "Installing Playwright dependencies..."
+go get github.com/playwright-community/playwright-go
+go run github.com/playwright-community/playwright-go/cmd/playwright install
 
-# Check for the -debug flag
-for arg in "$@"; do
-  if [ "$arg" == "-debug" ]; then
-    DEBUG_MODE=true
-    echo "Debug mode enabled. Keeping metadata in WebAssembly build."
-    break
-  fi
-done
+echo "Building gRPC server..."
+go build -o bin/server cmd/server/main.go
 
-mkdir -p "$BIN_DIR"
-mkdir -p "$PUBLIC_DIR"
-mkdir -p "./data"
+echo "Building gRPC-over-WebSocket bridge..."
+go build -o bin/bridge cmd/bridge/main.go
 
-echo "Building server for ARM macOS (darwin/arm64)..."
-GOOS=darwin GOARCH=arm64 go build \
-    -o "$BIN_DIR/server" \
-    "$SERVER_DIR/main.go"
+echo "Building WASM client..."
+(cd client && GOOS=js GOARCH=wasm go build -o ../public/client.wasm)
 
-echo "Server built: $BIN_DIR/server"
-
-echo "Building client for WebAssembly (WASM)..."
-TEMP_WASM="$PUBLIC_DIR/client_temp.wasm"
-
-if [ "$DEBUG_MODE" = true ]; then
-  # Build without stripping metadata
-  GOOS=js GOARCH=wasm go build \
-      -o "$PUBLIC_DIR/client.wasm" \
-      "$CLIENT_DIR/main.go"
-  echo "Client built with metadata: $PUBLIC_DIR/client.wasm"
+echo "Copying wasm_exec.js..."
+# Find the path to wasm_exec.js in the Go installation
+GO_PATH=$(go env GOROOT)
+# Go 1.24+ moved wasm_exec.js to lib/wasm, try both locations
+if [ -f "$GO_PATH/lib/wasm/wasm_exec.js" ]; then
+    cp "$GO_PATH/lib/wasm/wasm_exec.js" public/wasm_exec.js
 else
-  # Build with stripped debug symbols
-  GOOS=js GOARCH=wasm go build \
-      -ldflags="-s -w" \
-      -o "$TEMP_WASM" \
-      "$CLIENT_DIR/main.go"
-
-  # Optimize with wasm-opt if available
-  if command -v wasm-opt &> /dev/null; then
-    echo "Optimizing client.wasm with wasm-opt -Os..."
-    wasm-opt -Os "$TEMP_WASM" -o "$PUBLIC_DIR/client.wasm"
-    rm "$TEMP_WASM"
-  else
-    echo "wasm-opt not found, skipping additional optimization."
-    mv "$TEMP_WASM" "$PUBLIC_DIR/client.wasm"
-  fi
-
-  echo "Client built: $PUBLIC_DIR/client.wasm"
-fi
-
-echo "Copying wasm_exec.js to public..."
-cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" "$PUBLIC_DIR/"
-
-# Create an empty data/todos.json if not existing
-if [ ! -f "./data/todos.json" ]; then
-  echo "[]" > "./data/todos.json"
+    cp "$GO_PATH/misc/wasm/wasm_exec.js" public/wasm_exec.js
 fi
 
 echo "Build complete."

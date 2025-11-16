@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package myservice;
+
+option go_package = "grpc-tunnel/proto";
+
+// A simple echo service for demonstration
+service EchoService {
+  rpc Echo(EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoResponse {
+  string message = 1;
+}
