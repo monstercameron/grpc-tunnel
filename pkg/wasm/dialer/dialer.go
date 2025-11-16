@@ -13,6 +13,20 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	// WebSocket ready states (https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState)
+	webSocketStateConnecting = 0 // Connection not yet open
+	webSocketStateOpen       = 1 // Connection open and ready to communicate
+	webSocketStateClosing    = 2 // Connection in the process of closing
+	webSocketStateClosed     = 3 // Connection closed or couldn't be opened
+
+	// JavaScript WebSocket event handlers
+	jsEventOnOpen = "onopen"
+
+	// JavaScript WebSocket properties
+	jsPropertyReadyState = "readyState"
+)
+
 // newBrowserWebSocketDialer creates a custom gRPC dialer that establishes a WebSocket
 // connection in the browser environment and prepares it for gRPC communication.
 //
@@ -34,7 +48,7 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 	return func(dialContext context.Context, grpcTargetAddress string) (net.Conn, error) {
 		// Access the browser's WebSocket constructor from the JavaScript global scope.
 		// This is the standard browser WebSocket API.
-		browserWebSocketConstructor := js.Global().Get("WebSocket")
+		browserWebSocketConstructor := js.Global().Get(jsGlobalWebSocket)
 		if !browserWebSocketConstructor.Truthy() {
 			// WebSocket API not available - this shouldn't happen in modern browsers
 			// but could occur in non-browser WASM environments
@@ -48,7 +62,7 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 		// Configure the WebSocket to use ArrayBuffer for binary data.
 		// gRPC requires binary communication, so we must set binaryType to 'arraybuffer'.
 		// The alternative 'blob' type would be incompatible with our data handling.
-		browserWebSocket.Set("binaryType", "arraybuffer")
+		browserWebSocket.Set(jsPropertyBinaryType, jsBinaryTypeArrayBuffer)
 
 		// Create our net.Conn adapter that wraps this browser WebSocket.
 		// This adapter translates between the event-driven WebSocket API
@@ -71,7 +85,7 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 		// Browser WebSocket connections are asynchronous, so we must wait for this event
 		// before we can start using the connection.
 		connectionOpenChannel := make(chan struct{}, 1)
-		browserWebSocket.Set("onopen", js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+		browserWebSocket.Set(jsEventOnOpen, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
 			// Signal that the connection is now open and ready to use
 			connectionOpenChannel <- struct{}{}
 			return nil
@@ -91,8 +105,8 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 		case <-dialContext.Done():
 			// The dialing context was cancelled or timed out before connection completed.
 			// Clean up by closing the WebSocket if it's still in the CONNECTING state.
-			if browserWebSocket.Get("readyState").Int() == 0 { // 0 = CONNECTING state
-				browserWebSocket.Call("close")
+			if browserWebSocket.Get(jsPropertyReadyState).Int() == webSocketStateConnecting {
+				browserWebSocket.Call(jsMethodClose)
 			}
 			// Return the context error (DeadlineExceeded or Canceled)
 			return nil, dialContext.Err()

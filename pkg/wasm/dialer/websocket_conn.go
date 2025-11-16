@@ -8,6 +8,35 @@ import (
 	"time"
 )
 
+const (
+	// JavaScript API names
+	jsGlobalWebSocket = "WebSocket"
+	jsGlobalUint8Array = "Uint8Array"
+	jsGlobalObject     = "Object"
+
+	// WebSocket event handlers
+	jsEventOnMessage = "onmessage"
+	jsEventOnError   = "onerror"
+	jsEventOnClose   = "onclose"
+
+	// WebSocket methods
+	jsMethodSend  = "send"
+	jsMethodClose = "close"
+
+	// WebSocket properties
+	jsPropertyBinaryType = "binaryType"
+	jsPropertyData       = "data"
+	jsPropertyLength     = "length"
+
+	// WebSocket binary type values
+	jsBinaryTypeArrayBuffer = "arraybuffer"
+
+	// Network type constants
+	networkTypeWebSocket = "websocket"
+	addressLocal         = "local"
+	addressRemote        = "remote"
+)
+
 // browserWebSocketConnection implements the net.Conn interface for a browser WebSocket.
 // This allows the Go gRPC client to use a WebSocket as its underlying transport.
 //
@@ -67,17 +96,17 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 	// Set up the onmessage handler to receive incoming WebSocket data.
 	// Browser WebSocket messages arrive as JavaScript events, which we must
 	// convert to Go byte slices and send through a channel.
-	browserWebSocket.Set("onmessage", js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+	browserWebSocket.Set(jsEventOnMessage, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
 		messageEvent := eventArgs[0]
-		messageData := messageEvent.Get("data")
+		messageData := messageEvent.Get(jsPropertyData)
 
 		// WebSocket data can arrive as ArrayBuffer or Blob.
 		// We configured binaryType="arraybuffer" so we expect ArrayBuffer.
 		var messageBytes []byte
 		if messageData.Type() == js.TypeObject {
 			// Convert the JavaScript ArrayBuffer to a Uint8Array for easy copying
-			uint8Array := js.Global().Get("Uint8Array").New(messageData)
-			arrayLength := uint8Array.Get("length").Int()
+			uint8Array := js.Global().Get(jsGlobalUint8Array).New(messageData)
+			arrayLength := uint8Array.Get(jsPropertyLength).Int()
 			if arrayLength > 0 {
 				// Allocate a Go byte slice and copy the data from JavaScript
 				messageBytes = make([]byte, arrayLength)
@@ -94,7 +123,7 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 
 	// Set up the onerror handler to detect WebSocket errors.
 	// Browser WebSocket errors are asynchronous events.
-	browserWebSocket.Set("onerror", js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+	browserWebSocket.Set(jsEventOnError, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
 		// Send a generic error to Read().
 		// The browser doesn't provide detailed error information in the event,
 		// so we use net.ErrClosed as a generic connection error.
@@ -104,7 +133,7 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 
 	// Set up the onclose handler to detect when the WebSocket closes.
 	// This can happen due to explicit Close() calls or network issues.
-	browserWebSocket.Set("onclose", js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+	browserWebSocket.Set(jsEventOnClose, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
 		// Send error to any pending Read() calls
 		connection.incomingErrorsChannel <- net.ErrClosed
 		// Close the channels to signal no more data will arrive.
@@ -168,22 +197,22 @@ func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (in
 //   - err: Any error that occurred during writing
 //
 // The write operation:
-//   1. Converts the Go byte slice to a JavaScript Uint8Array
-//   2. Sends it via the browser's WebSocket.send() method
-//   3. Returns immediately (browser handles actual transmission)
+//  1. Converts the Go byte slice to a JavaScript Uint8Array
+//  2. Sends it via the browser's WebSocket.send() method
+//  3. Returns immediately (browser handles actual transmission)
 //
 // Note: WebSocket writes are asynchronous in the browser, so this
 // function returns before the data is actually transmitted over the network.
 func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, error) {
 	// Convert the Go byte slice to a JavaScript Uint8Array.
 	// This is necessary because browser WebSocket.send() expects JavaScript types.
-	uint8ArrayToSend := js.Global().Get("Uint8Array").New(len(sourceData))
+	uint8ArrayToSend := js.Global().Get(jsGlobalUint8Array).New(len(sourceData))
 	js.CopyBytesToJS(uint8ArrayToSend, sourceData)
 
 	// Send the data over the WebSocket using the browser API.
 	// This is an asynchronous operation - the browser handles the actual
 	// network transmission in the background.
-	connection.browserWebSocket.Call("send", uint8ArrayToSend)
+	connection.browserWebSocket.Call(jsMethodSend, uint8ArrayToSend)
 
 	// Return the number of bytes "written".
 	// Note: This doesn't mean the data has been transmitted, just that
@@ -203,7 +232,7 @@ func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, err
 func (connection *browserWebSocketConnection) Close() error {
 	// Call the browser's WebSocket.close() method.
 	// This is asynchronous - the actual close happens in the background.
-	connection.browserWebSocket.Call("close")
+	connection.browserWebSocket.Call(jsMethodClose)
 	return nil
 }
 
@@ -217,7 +246,7 @@ func (connection *browserWebSocketConnection) Close() error {
 // so this returns a placeholder. This is acceptable as gRPC doesn't
 // rely on local address information for WebSocket connections.
 func (connection *browserWebSocketConnection) LocalAddr() net.Addr {
-	return &browserWebSocketAddr{"websocket", "local"}
+	return &browserWebSocketAddr{networkTypeWebSocket, addressLocal}
 }
 
 // RemoteAddr returns the remote network address.
@@ -230,7 +259,7 @@ func (connection *browserWebSocketConnection) LocalAddr() net.Addr {
 // so this returns a placeholder. This is acceptable as gRPC doesn't
 // rely on remote address information for WebSocket connections.
 func (connection *browserWebSocketConnection) RemoteAddr() net.Addr {
-	return &browserWebSocketAddr{"websocket", "remote"}
+	return &browserWebSocketAddr{networkTypeWebSocket, addressRemote}
 }
 
 // SetDeadline sets the read and write deadlines for the connection.
@@ -289,7 +318,7 @@ func (connection *browserWebSocketConnection) SetWriteDeadline(deadline time.Tim
 // but the net.Conn interface requires LocalAddr() and RemoteAddr() methods.
 // This struct provides dummy values to satisfy the interface.
 type browserWebSocketAddr struct {
-	networkType    string // Always "websocket"
+	networkType   string // Always "websocket"
 	addressString string // Either "local" or "remote"
 }
 
