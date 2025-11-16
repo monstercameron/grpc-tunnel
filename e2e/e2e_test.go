@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -53,15 +54,34 @@ func startCommand(t *testing.T, projectRoot, name string, command string, args .
 	cleanupFunc := func() {
 		t.Logf("Cleaning up %s process...", name)
 
-		// Kill the process
+		// Kill the process and all its children
 		if err := cmd.Process.Kill(); err != nil {
 			t.Logf("Failed to kill %s process: %v", name, err)
 		}
 		// Wait for process to actually terminate
 		cmd.Wait()
 
-		// Use pkill to ensure all child processes are killed
-		exec.Command("pkill", "-9", "-f", "direct-bridge").Run()
+		// Use platform-appropriate commands to kill any remaining processes
+		switch runtime.GOOS {
+		case "windows":
+			// Kill by image name
+			exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq direct-bridge.exe").Run()
+			exec.Command("powershell", "-Command", "Get-Process -Name 'direct-bridge' -ErrorAction SilentlyContinue | Stop-Process -Force").Run()
+			
+			// Find and kill process using port 5000
+			exec.Command("powershell", "-Command", 
+				"(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }").Run()
+		
+		case "linux", "darwin":
+			// Kill by process name
+			exec.Command("pkill", "-9", "-f", "direct-bridge").Run()
+			
+			// Find and kill process using port 5000
+			exec.Command("sh", "-c", "lsof -ti:5000 | xargs kill -9 2>/dev/null").Run()
+		
+		default:
+			t.Logf("Unsupported OS: %s, skipping additional cleanup", runtime.GOOS)
+		}
 
 		// Close pipes to unblock scanners
 		if stdout != nil {
@@ -205,7 +225,7 @@ func TestMultipleSequentialRequests(t *testing.T) {
 	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "public"))
+	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
 	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
 	go func() {
 		if err := fileServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -287,7 +307,7 @@ func TestConnectionResilience(t *testing.T) {
 	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "public"))
+	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
 	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
 	go func() {
 		if err := fileServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -390,7 +410,7 @@ func TestConcurrentConnections(t *testing.T) {
 	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "public"))
+	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
 	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
 	go func() {
 		if err := fileServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -506,7 +526,7 @@ func TestLargePayload(t *testing.T) {
 	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "public"))
+	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
 	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
 	go func() {
 		if err := fileServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
