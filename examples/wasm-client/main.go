@@ -23,9 +23,9 @@ func main() {
 
 	grpcConnection, dialError := grpc.DialContext(
 		dialContext,
-		"localhost:8080", // Target will be ignored, dialer handles connection
+		"localhost:5000", // Target will be ignored, dialer handles connection
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		dialer.New("ws://localhost:8080/"), // Use our custom WASM dialer
+		dialer.New("ws://localhost:5000/"), // Use our custom WASM dialer
 	)
 	if dialError != nil {
 		log.Fatalf("WASM: Failed to connect to gRPC server via WebSocket: %v", dialError)

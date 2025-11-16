@@ -4,7 +4,7 @@ go 1.24.0
 
 toolchain go1.24.10
 
-replace grpc-tunnel => ../
+replace grpc-tunnel => ../../
 
 require (
 	google.golang.org/grpc v1.76.0

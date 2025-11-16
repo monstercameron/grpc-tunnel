@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -27,6 +28,10 @@ type todoServer struct {
 func loadTodos() ([]*proto.Todo, error) {
 	const filePath = "./data/todos.json"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Create data directory if it doesn't exist
+		if err := os.MkdirAll("./data", 0755); err != nil {
+			return nil, fmt.Errorf("failed to create data directory: %w", err)
+		}
 		if err := ioutil.WriteFile(filePath, []byte("[]"), 0644); err != nil {
 			return nil, fmt.Errorf("failed to create todos.json: %w", err)
 		}
@@ -137,6 +142,12 @@ func main() {
 		},
 	}))
 
-	log.Println("Direct gRPC-over-WebSocket server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Direct gRPC-over-WebSocket server listening on :5000")
+	
+	// Create listener with SO_REUSEADDR to avoid "address already in use" errors
+	listener, err := net.Listen("tcp", ":5000")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(http.Serve(listener, nil))
 }
