@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"grpc-tunnel/pkg/bridge"
+	"grpc-tunnel/examples/_shared/helpers"
 )
 
 func main() {
@@ -24,12 +24,12 @@ func main() {
 	})
 
 	// gRPC bridge on specific path
-	mux.Handle("/grpc", bridge.NewHandler(bridge.Config{
+	mux.Handle("/grpc", helpers.NewHandler(helpers.Config{
 		TargetAddress: "localhost:50051",
 	}))
 
 	// Another bridge for a different service
-	mux.Handle("/api/v2/grpc", bridge.NewHandler(bridge.Config{
+	mux.Handle("/api/v2/grpc", helpers.NewHandler(helpers.Config{
 		TargetAddress: "localhost:50052",
 	}))
 

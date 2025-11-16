@@ -4,8 +4,8 @@ package dialer
 
 import (
 	"net"
-	"testing"
 	"syscall/js"
+	"testing"
 )
 
 // TestWebSocketConn_NetConnInterface ensures that WebSocketConn implements the net.Conn interface.

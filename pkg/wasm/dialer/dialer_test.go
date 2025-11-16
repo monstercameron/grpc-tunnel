@@ -48,7 +48,7 @@ func TestNew_URLFormats(t *testing.T) {
 func TestNewWebSocketDialer_NoWebSocketGlobal(t *testing.T) {
 	// In a real WASM environment, WebSocket should always be available
 	// This tests the error path if it's not
-	
+
 	// We can't easily remove the global WebSocket, so this is a documentation test
 	t.Skip("Cannot test missing WebSocket in real WASM environment")
 }
@@ -88,7 +88,7 @@ func TestNewWebSocketDialer_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	dialer := newWebSocketDialer("ws://localhost:8080")
-	
+
 	_, err := dialer(ctx, "test:1234")
 
 	if err == nil {
@@ -110,7 +110,7 @@ func TestNewWebSocketDialer_Timeout(t *testing.T) {
 	defer cancel()
 
 	dialer := newWebSocketDialer("ws://localhost:9999") // Non-existent server
-	
+
 	_, err := dialer(ctx, "test:1234")
 
 	// Should timeout or fail to connect

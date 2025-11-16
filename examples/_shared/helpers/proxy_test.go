@@ -1,4 +1,4 @@
-package bridge
+package helpers
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 
 // Package-level tests are in separate files:
 // - conn_test.go: Tests for webSocketConn
-// - server_test.go: Tests for ServeHandler and ServerConfig  
+// - server_test.go: Tests for ServeHandler and ServerConfig
 // - client_test.go: Tests for DialOption (non-WASM builds)
 
 // TestPackage is a placeholder to ensure the test package compiles

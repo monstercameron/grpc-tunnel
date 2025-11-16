@@ -12,10 +12,11 @@ import (
 	"os"
 	"sync"
 
+	"grpc-tunnel/examples/_shared/helpers"
+	"grpc-tunnel/examples/_shared/proto"
+
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"grpc-tunnel/pkg/bridge"
-	"grpc-tunnel/examples/_shared/proto"
 )
 
 // TodoServer implementation
@@ -132,7 +133,7 @@ func main() {
 	proto.RegisterTodoServiceServer(grpcServer, srv)
 
 	// Serve gRPC directly over WebSocket
-	http.Handle("/", bridge.ServeHandler(bridge.ServerConfig{
+	http.Handle("/", helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer: grpcServer,
 		OnConnect: func(r *http.Request) {
 			log.Printf("Client connected: %s", r.RemoteAddr)
@@ -143,7 +144,7 @@ func main() {
 	}))
 
 	log.Println("Direct gRPC-over-WebSocket server listening on :5000")
-	
+
 	// Create listener with SO_REUSEADDR to avoid "address already in use" errors
 	listener, err := net.Listen("tcp", ":5000")
 	if err != nil {

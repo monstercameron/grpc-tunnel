@@ -52,17 +52,17 @@ func startCommand(t *testing.T, projectRoot, name string, command string, args .
 
 	cleanupFunc := func() {
 		t.Logf("Cleaning up %s process...", name)
-		
+
 		// Kill the process
 		if err := cmd.Process.Kill(); err != nil {
 			t.Logf("Failed to kill %s process: %v", name, err)
 		}
 		// Wait for process to actually terminate
 		cmd.Wait()
-		
+
 		// Use pkill to ensure all child processes are killed
 		exec.Command("pkill", "-9", "-f", "direct-bridge").Run()
-		
+
 		// Close pipes to unblock scanners
 		if stdout != nil {
 			stdout.Close()
@@ -98,7 +98,7 @@ func TestCreateTodoEndToEnd(t *testing.T) {
 
 	// --- 1. Build Phase ---
 	t.Log("Building all components...")
-	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
+	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
 	buildCmd.Dir = projectRoot // Run build.sh from the project root
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
@@ -194,7 +194,7 @@ func TestMultipleSequentialRequests(t *testing.T) {
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
+	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
@@ -276,7 +276,7 @@ func TestConnectionResilience(t *testing.T) {
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
+	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
@@ -320,12 +320,12 @@ func TestConnectionResilience(t *testing.T) {
 
 	consoleMessages := make(chan string, 100)
 	errorMessages := make(chan string, 100)
-	
+
 	page.On("console", func(msg playwright.ConsoleMessage) {
 		text := msg.Text()
 		t.Logf("[Browser Console] %s", text)
 		consoleMessages <- text
-		
+
 		// Track errors separately
 		if msg.Type() == "error" || strings.Contains(strings.ToLower(text), "error") ||
 			strings.Contains(strings.ToLower(text), "failed") {
@@ -359,7 +359,7 @@ func TestConnectionResilience(t *testing.T) {
 			}
 			return
 		}
-		
+
 		if gotSuccess {
 			t.Log("Connection resilience test passed - successful todo creation")
 			return
@@ -370,22 +370,21 @@ func TestConnectionResilience(t *testing.T) {
 // TestConcurrentConnections tests multiple browser tabs connecting simultaneously
 func TestConcurrentConnections(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping concurrent connection test in short mode")
+		t.Skip("Skipping e2e test in short mode")
 	}
 
 	projectRoot, err := filepath.Abs("..")
 	if err != nil {
-		t.Fatalf("Failed to get project root directory: %v", err)
+		t.Fatalf("Failed to get project root: %v", err)
 	}
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
+	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
 	}
-
 	// Start services
 	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
 	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
@@ -496,7 +495,7 @@ func TestLargePayload(t *testing.T) {
 
 	// Build
 	t.Log("Building components...")
-	buildCmd := exec.Command("bash", filepath.Join("examples", "wasm-client", "build.sh"))
+	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
 	buildCmd.Dir = projectRoot
 	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))

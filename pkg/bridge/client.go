@@ -27,6 +27,6 @@ func DialOption(websocketURL string) grpc.DialOption {
 			return nil, err
 		}
 		// Return WebSocket wrapped as net.Conn
-		return newWebSocketConn(ws), nil
+		return NewWebSocketConn(ws), nil
 	})
 }

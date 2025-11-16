@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"grpc-tunnel/pkg/bridge"
+	"grpc-tunnel/examples/_shared/helpers"
 )
 
 type customLogger struct{}
@@ -27,7 +27,7 @@ func main() {
 	origins := strings.Split(*allowedOrigins, ",")
 
 	// Create bridge with production config
-	handler := bridge.NewHandler(bridge.Config{
+	handler := helpers.NewHandler(helpers.Config{
 		TargetAddress: *target,
 
 		// Custom origin validation

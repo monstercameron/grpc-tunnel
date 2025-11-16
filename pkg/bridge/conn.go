@@ -16,7 +16,9 @@ type webSocketConn struct {
 	writeDeadline time.Time
 }
 
-func newWebSocketConn(ws *websocket.Conn) net.Conn {
+// NewWebSocketConn wraps a WebSocket connection as a net.Conn.
+// This is the core primitive that enables gRPC over WebSocket.
+func NewWebSocketConn(ws *websocket.Conn) net.Conn {
 	return &webSocketConn{ws: ws}
 }
 

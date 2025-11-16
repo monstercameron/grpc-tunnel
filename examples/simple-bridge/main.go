@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
-	"grpc-tunnel/pkg/bridge"
+	"grpc-tunnel/examples/_shared/helpers"
 )
 
 func main() {
 	// Create bridge with minimal config
-	handler := bridge.NewHandler(bridge.Config{
+	handler := helpers.NewHandler(helpers.Config{
 		TargetAddress: "localhost:50051",
 	})
 

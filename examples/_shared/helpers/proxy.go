@@ -1,4 +1,4 @@
-package bridge
+package helpers
 
 import (
 	"crypto/tls"
@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"grpc-tunnel/pkg/bridge"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/http2"
@@ -64,10 +66,10 @@ type Handler struct {
 //
 // Example:
 //
-//	bridge := bridge.NewHandler(bridge.Config{
+//	handler := helpers.NewHandler(helpers.Config{
 //	    TargetAddress: "localhost:50051",
 //	})
-//	http.Handle("/", bridge)
+//	http.Handle("/", handler)
 //	http.ListenAndServe(":8080", nil)
 func NewHandler(cfg Config) *Handler {
 	// Set defaults
@@ -139,7 +141,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Wrap WebSocket as net.Conn
-	conn := newWebSocketConn(ws)
+	conn := bridge.NewWebSocketConn(ws)
 	defer conn.Close()
 
 	// Serve HTTP/2 over the WebSocket connection

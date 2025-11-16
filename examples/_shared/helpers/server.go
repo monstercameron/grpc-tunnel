@@ -1,8 +1,10 @@
-package bridge
+package helpers
 
 import (
 	"net"
 	"net/http"
+
+	"grpc-tunnel/pkg/bridge"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/http2"
@@ -80,7 +82,7 @@ func ServeHandler(cfg ServerConfig) http.Handler {
 		}()
 
 		// Wrap WebSocket as net.Conn
-		conn := newWebSocketConn(ws)
+		conn := bridge.NewWebSocketConn(ws)
 		defer conn.Close()
 
 		// Serve gRPC over HTTP/2 on the WebSocket connection

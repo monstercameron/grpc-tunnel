@@ -1,6 +1,6 @@
 //go:build !js && !wasm
 
-package bridge
+package tests
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"grpc-tunnel/examples/_shared/helpers"
+	"grpc-tunnel/examples/_shared/proto"
+	"grpc-tunnel/pkg/bridge"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"grpc-tunnel/examples/_shared/proto"
 )
 
 // mockTodoService implements a simple in-memory TodoService for testing
@@ -46,7 +49,7 @@ func TestIntegration_FullRoundtrip(t *testing.T) {
 	defer grpcServer.Stop()
 
 	// Create bridge handler
-	handler := ServeHandler(ServerConfig{
+	handler := helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer: grpcServer,
 	})
 
@@ -57,14 +60,14 @@ func TestIntegration_FullRoundtrip(t *testing.T) {
 	// Convert http:// to ws://
 	wsURL := "ws" + server.URL[4:]
 
-	// Create gRPC client using bridge DialOption
+	// Create gRPC client using bridge bridge.DialOption
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	conn, err := grpc.DialContext(
 		ctx,
 		server.URL,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -111,7 +114,7 @@ func TestIntegration_LifecycleHooks(t *testing.T) {
 
 	var connectCalled, disconnectCalled bool
 
-	handler := ServeHandler(ServerConfig{
+	handler := helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer: grpcServer,
 		OnConnect: func(r *http.Request) {
 			connectCalled = true
@@ -132,7 +135,7 @@ func TestIntegration_LifecycleHooks(t *testing.T) {
 	conn, err := grpc.DialContext(
 		ctx,
 		server.URL,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -163,7 +166,7 @@ func TestIntegration_CustomBufferSizes(t *testing.T) {
 	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
 	defer grpcServer.Stop()
 
-	handler := ServeHandler(ServerConfig{
+	handler := helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer:      grpcServer,
 		ReadBufferSize:  8192,
 		WriteBufferSize: 8192,
@@ -180,7 +183,7 @@ func TestIntegration_CustomBufferSizes(t *testing.T) {
 	conn, err := grpc.DialContext(
 		ctx,
 		server.URL,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -211,7 +214,7 @@ func TestServe_WithListener(t *testing.T) {
 
 	// Start server in background
 	go func() {
-		_ = Serve(listener, grpcServer)
+		_ = helpers.Serve(listener, grpcServer)
 	}()
 
 	// Give server time to start
@@ -227,7 +230,7 @@ func TestServe_WithListener(t *testing.T) {
 	conn, err := grpc.DialContext(
 		ctx,
 		addr,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -253,7 +256,7 @@ func TestIntegration_MultipleRequests(t *testing.T) {
 	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
 	defer grpcServer.Stop()
 
-	handler := ServeHandler(ServerConfig{
+	handler := helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer: grpcServer,
 	})
 
@@ -268,7 +271,7 @@ func TestIntegration_MultipleRequests(t *testing.T) {
 	conn, err := grpc.DialContext(
 		ctx,
 		server.URL,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -294,7 +297,7 @@ func TestIntegration_OriginCheck(t *testing.T) {
 	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
 	defer grpcServer.Stop()
 
-	handler := ServeHandler(ServerConfig{
+	handler := helpers.ServeHandler(helpers.ServerConfig{
 		GRPCServer: grpcServer,
 		CheckOrigin: func(r *http.Request) bool {
 			// Reject all origins
@@ -314,7 +317,7 @@ func TestIntegration_OriginCheck(t *testing.T) {
 	_, err := grpc.DialContext(
 		ctx,
 		server.URL,
-		DialOption(wsURL),
+		bridge.DialOption(wsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)

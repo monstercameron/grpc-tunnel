@@ -25,12 +25,12 @@ func TestDialOption_ReturnType(t *testing.T) {
 	defer cancel()
 
 	conn, _ := grpc.DialContext(ctx, "localhost:8080", opt, grpc.WithInsecure(), grpc.WithBlock())
-	
+
 	// Clean up if somehow it connected
 	if conn != nil {
 		conn.Close()
 	}
-	
+
 	// Test passes if we get here without panic
 }
 
