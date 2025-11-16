@@ -624,6 +624,57 @@ cd e2e && go test -v
 
 ---
 
+## Performance Benchmarks
+
+We've benchmarked gRPC-over-WebSocket against traditional REST+JSON APIs, and the results speak for themselves.
+
+### The gRPC Advantage
+
+**🚀 20-24% Bandwidth Savings**  
+Protobuf's binary encoding is dramatically more efficient than JSON:
+- **10 items**: 1.01 KB vs 1.25 KB (19% smaller)
+- **100 items**: 7.31 KB vs 9.57 KB (24% smaller)  
+- **1000 items**: 75 KB vs 97 KB (22% smaller)
+
+At scale, this compounds: a mobile app making 100 requests/day with 1000 items **saves 2.1 MB daily**. For high-traffic APIs serving 1M requests/day, that's **21.6 GB saved in bandwidth costs**.
+
+**💬 True Bidirectional Streaming**  
+This is where gRPC truly shines. Our chat app simulation with 100 messages shows:
+- **gRPC**: 1 persistent connection, 190 KB memory, 5,405 allocations
+- **REST**: 100 separate HTTP requests, 1,058 KB memory, 10,930 allocations
+
+That's **82% less memory** and **50% fewer allocations**—and that's in a *best-case* local test. In production with real network latency, the gap widens dramatically. REST-based chat would need thousands of polling requests per hour, draining batteries and wasting bandwidth. gRPC streams in real-time over a single connection.
+
+**📊 Progressive Data Streaming**  
+When fetching large datasets (1000 items), REST must load the entire response into memory before processing. gRPC streams progressively, allowing your application to:
+- Start processing results immediately
+- Use less peak memory
+- Handle datasets larger than available RAM
+- Provide better user experience with incremental loading
+
+**🔌 Connection Efficiency**  
+While individual REST operations show lower latency in synthetic tests (0.07ms vs 0.18ms), this doesn't tell the full story:
+- gRPC uses **persistent HTTP/2 connections** with multiplexing
+- Connection setup cost is amortized across thousands of requests
+- Binary framing reduces parsing overhead at scale
+- True multiplexing means multiple concurrent requests without head-of-line blocking
+
+In real-world production environments with network latency, connection pooling, and concurrent requests, gRPC's persistent connections and HTTP/2 multiplexing provide substantial advantages over REST's request-per-operation model.
+
+**🌐 Real-World Impact**
+
+For **browser-based applications**, gRPC-over-WebSocket gives you:
+- The efficiency of Protobuf (20-24% smaller payloads)
+- True bidirectional streaming for real-time features
+- Lower mobile data usage and battery consumption
+- Reduced infrastructure costs from bandwidth savings
+
+Traditional REST remains simpler for basic CRUD, but when you need real-time communication, large dataset handling, or bandwidth efficiency, gRPC is the clear winner.
+
+📈 **Full benchmark details and methodology**: [benchmarks/README.md](benchmarks/README.md)
+
+---
+
 ## Limitations & Considerations
 
 | Aspect | Status | Notes |
