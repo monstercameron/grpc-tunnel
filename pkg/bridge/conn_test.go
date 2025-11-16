@@ -53,17 +53,6 @@ func (m *mockWebSocket) RemoteAddr() net.Addr {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9090}
 }
 
-// mockWSConn is a wrapper to satisfy the websocket.Conn interface
-type mockWSConn struct {
-	*mockWebSocket
-}
-
-func newMockWSConn(mock *mockWebSocket) *websocket.Conn {
-	// This is a test helper - in real code we can't create websocket.Conn directly
-	// Instead we'll test with the mock interface
-	return nil
-}
-
 // TestWebSocketConn_Read tests the Read method
 func TestWebSocketConn_Read(t *testing.T) {
 	tests := []struct {
@@ -95,15 +84,6 @@ func TestWebSocketConn_Read(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = &mockWebSocket{
-				readMessages: tt.messages,
-			}
-			
-			// Create webSocketConn with our custom mock
-			_ = &webSocketConn{
-				ws: &websocket.Conn{}, // placeholder
-			}
-			
 			// We need to test the logic directly since we can't fully mock websocket.Conn
 			// Instead, let's test the buffering logic
 			if len(tt.messages) > 0 {

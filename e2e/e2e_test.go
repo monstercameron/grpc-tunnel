@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -16,23 +15,6 @@ import (
 
 	"github.com/playwright-community/playwright-go"
 )
-
-// waitForPort waits until the specified port becomes available or times out
-func waitForPort(t *testing.T, port string, timeout time.Duration) error {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", "localhost:"+port, 100*time.Millisecond)
-		if err != nil {
-			// Port is available (connection failed - nothing listening)
-			return nil
-		}
-		// Port still in use, close and try again
-		conn.Close()
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("port %s still in use after %v", port, timeout)
-}
 
 // startCommand is a helper function to start a command as a background process.
 // It sets the working directory to the project root.
