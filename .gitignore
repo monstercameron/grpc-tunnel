@@ -1,39 +1,142 @@
-# Binaries
+# Binaries for all platforms
 bin/
 *.exe
+*.exe~
 *.dll
 *.so
 *.dylib
+*.out
+*.test
 
-# Test coverage
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
 coverage.out
 coverage.html
 coverage-report.txt
+coverage.txt
+*.coverprofile
 
 # WASM builds (generated)
 public/client.wasm
 public/*.wasm
+*.wasm
 
 # Runtime data
-data/todos.json
-data/*.json
+data/
+*.json
+!go.json
+!go.sum
+!package.json
+!package-lock.json
 
-# OS files
-.DS_Store
-Thumbs.db
+# Dependency directories
+vendor/
+node_modules/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Go workspace
+# Go workspace files
 go.work
 go.work.sum
 
-# Temporary files
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE and Editor files
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw?
+Session.vim
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+
+# Temporary and log files
 *.tmp
+*.temp
 *.log
+*.pid
+*.seed
+*.pid.lock
+
+# Debug files
+debug
+debug.test
+__debug_bin
+
+# Build and dist directories
+dist/
+build/
+out/
+
+# Profiling data
+*.prof
+*.pprof
+cpu.prof
+mem.prof
+profile.out
+
+# Test cache
+.cache/
+*.cache
+
+# Scratch and test files
 test.go
+scratch.*
+tmp.*
+temp.*
+
+# macOS
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
