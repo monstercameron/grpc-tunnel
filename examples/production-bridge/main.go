@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"grpc-tunnel/examples/_shared/helpers"
 )
@@ -62,8 +63,16 @@ func main() {
 		},
 	})
 
+	server := &http.Server{
+		Addr:         *addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
 	log.Printf("Production bridge starting on %s", *addr)
 	log.Printf("Proxying to gRPC server at %s", *target)
 	log.Printf("Allowed origins: %v", origins)
-	log.Fatal(http.ListenAndServeTLS(*addr, *cert, *key, handler))
+	log.Fatal(server.ListenAndServeTLS(*cert, *key))
 }

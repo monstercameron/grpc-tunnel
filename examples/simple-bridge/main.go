@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"grpc-tunnel/examples/_shared/helpers"
 )
@@ -14,7 +15,15 @@ func main() {
 		TargetAddress: "localhost:50051",
 	})
 
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
 	log.Println("Bridge listening on :8080")
 	log.Println("Proxying to gRPC server at localhost:50051")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	log.Fatal(server.ListenAndServe())
 }

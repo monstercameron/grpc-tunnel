@@ -151,13 +151,54 @@ git commit --no-verify -m "Your message"
 The `security` job runs [Gosec](https://github.com/securego/gosec) to detect:
 - SQL injection vulnerabilities
 - Hardcoded credentials
-- Weak crypto algorithms
+- Weak crypto algorithms (MD5, SHA1, etc.)
 - File path traversal
 - Unhandled errors that could cause security issues
+- HTTP servers without timeouts
+- Insecure file permissions
 
-Results appear in **GitHub → Security → Code scanning alerts**.
+### Severity Levels
 
-**Note:** Security scan is informational only - it won't block builds or commits.
+Gosec categorizes issues by **severity** (LOW, MEDIUM, HIGH) and **confidence** (LOW, MEDIUM, HIGH):
+
+- **HIGH severity + HIGH confidence**: Critical security issues - **CI WILL FAIL** ❌
+  - Examples: SQL injection, hardcoded secrets, weak crypto
+- **MEDIUM severity**: Important but not critical - **CI passes but issues logged** ⚠️
+  - Examples: Missing timeouts, file permissions
+- **LOW severity**: Informational - **CI passes** ℹ️
+  - Examples: Unsafe calls in generated code
+
+### CI Behavior
+
+The security scan will **fail the build** if it finds issues with:
+- `severity=high` AND `confidence=high`
+
+This prevents deploying code with serious security vulnerabilities.
+
+**Note:** G103 (unsafe calls) is excluded as it appears in auto-generated protobuf code.
+
+### What is SARIF?
+
+**SARIF** (Static Analysis Results Interchange Format) is a standard JSON format for security scan results. It allows GitHub to:
+- Display security issues in the "Security" tab
+- Show warnings on pull requests
+- Track security trends over time
+
+**Note:** SARIF upload to GitHub Security tab requires **GitHub Advanced Security** (not available on free public repos). 
+
+### How to View Results
+
+1. **CI Workflow:** Results are uploaded as artifacts and shown in the workflow logs
+2. **Local Scan:** Run `gosec ./...` to see all security issues
+3. **Strict Check:** Run `gosec -severity=high -confidence=high -exclude=G103 ./...` (same as CI)
+4. **CI Artifacts:** Download `gosec-results` artifact from workflow runs (contains SARIF file)
+
+### Current Security Issues
+
+As of now, there are only **4 low-severity issues** (all in auto-generated protobuf code):
+- **Generated Code:** Unsafe calls in protobuf files (G103) - can't fix, excluded from CI
+
+**Production code** (`pkg/`) has **zero security issues**. ✅
 
 ## Code Style
 

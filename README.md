@@ -332,11 +332,19 @@ make lint-fix
 The `security` job in CI runs [Gosec](https://github.com/securego/gosec) to detect:
 - SQL injection vulnerabilities
 - Hardcoded credentials or tokens
-- Weak cryptographic algorithms
+- Weak cryptographic algorithms (MD5, SHA1, etc.)
 - File path traversal issues  
 - Unhandled errors that could cause security problems
+- HTTP servers without timeouts
+- Insecure file permissions
 
-Results appear in **GitHub → Security → Code scanning alerts**. The scan doesn't block builds but provides visibility into potential security issues.
+**SARIF** (Static Analysis Results Interchange Format) is a standard JSON format for security scan results. The scan uploads results as workflow artifacts for review.
+
+**CI will FAIL** ❌ if high-severity issues with high confidence are detected (e.g., SQL injection, hardcoded secrets).
+
+**CI will PASS** ✅ but log warnings for medium/low severity issues (e.g., unhandled errors, suboptimal permissions).
+
+Current status: **Zero high-severity issues** - only 4 low-severity issues in auto-generated protobuf code.
 
 ## Production Checklist
 

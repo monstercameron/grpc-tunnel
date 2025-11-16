@@ -14,11 +14,12 @@ import (
 // webSocketConn adapts a WebSocket connection to net.Conn interface.
 // This is needed because gRPC expects a net.Conn but browsers only have WebSocket.
 type webSocketConn struct {
-	ws        *websocket.Conn
-	reader    io.Reader
-	closeOnce sync.Once
-	closed    bool
-	closedMu  sync.RWMutex
+	ws         *websocket.Conn
+	reader     io.Reader
+	closeOnce  sync.Once
+	closed     bool
+	closedMu   sync.RWMutex
+	deadlineMu sync.Mutex // Protects deadline operations
 }
 
 func newWebSocketConn(ws *websocket.Conn) net.Conn {
@@ -86,6 +87,8 @@ func (c *webSocketConn) RemoteAddr() net.Addr {
 }
 
 func (c *webSocketConn) SetDeadline(t time.Time) error {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
 	if err := c.ws.SetReadDeadline(t); err != nil {
 		return err
 	}
@@ -93,9 +96,13 @@ func (c *webSocketConn) SetDeadline(t time.Time) error {
 }
 
 func (c *webSocketConn) SetReadDeadline(t time.Time) error {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
 	return c.ws.SetReadDeadline(t)
 }
 
 func (c *webSocketConn) SetWriteDeadline(t time.Time) error {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
 	return c.ws.SetWriteDeadline(t)
 }

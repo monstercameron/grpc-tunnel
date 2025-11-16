@@ -22,7 +22,7 @@ func loadTodos() ([]*proto.Todo, error) {
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		log.Printf("No proto.json found; creating new at %s\n", filePath)
-		if err := ioutil.WriteFile(filePath, []byte("[]"), 0644); err != nil {
+		if err := ioutil.WriteFile(filePath, []byte("[]"), 0600); err != nil {
 			return nil, fmt.Errorf("failed to create proto.json: %w", err)
 		}
 	}
@@ -38,7 +38,7 @@ func loadTodos() ([]*proto.Todo, error) {
 	var ts []*proto.Todo
 	if err := json.Unmarshal(data, &ts); err != nil {
 		log.Printf("Invalid JSON; resetting file. Error: %v\n", err)
-		_ = ioutil.WriteFile(filePath, []byte("[]"), 0644)
+		_ = ioutil.WriteFile(filePath, []byte("[]"), 0600)
 		return []*proto.Todo{}, nil
 	}
 	return ts, nil
@@ -51,7 +51,7 @@ func saveTodos(todosSlice []*proto.Todo) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filePath, out, 0644)
+	return ioutil.WriteFile(filePath, out, 0600)
 }
 
 // todoServer implements the gRPC methods for TodoService
@@ -147,7 +147,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	proto.RegisterTodoServiceServer(grpcServer, srv)
 
-	listener, err := net.Listen("tcp", ":50051")
+	listener, err := net.Listen("tcp", "localhost:50051")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}

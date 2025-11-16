@@ -3,6 +3,7 @@ package helpers
 import (
 	"net"
 	"net/http"
+	"time"
 
 	"grpc-tunnel/pkg/bridge"
 
@@ -107,5 +108,11 @@ func Serve(listener net.Listener, grpcServer *grpc.Server) error {
 	handler := ServeHandler(ServerConfig{
 		GRPCServer: grpcServer,
 	})
-	return http.Serve(listener, handler)
+	server := &http.Server{
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return server.Serve(listener)
 }

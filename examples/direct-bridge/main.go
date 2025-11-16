@@ -29,10 +29,10 @@ func loadTodos() ([]*proto.Todo, error) {
 	const filePath = "../_shared/data/todos.json"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		// Create data directory if it doesn't exist
-		if err := os.MkdirAll("../_shared/data", 0755); err != nil {
+		if err := os.MkdirAll("../_shared/data", 0750); err != nil {
 			return nil, fmt.Errorf("failed to create data directory: %w", err)
 		}
-		if err := ioutil.WriteFile(filePath, []byte("[]"), 0644); err != nil {
+		if err := ioutil.WriteFile(filePath, []byte("[]"), 0600); err != nil {
 			return nil, fmt.Errorf("failed to create todos.json: %w", err)
 		}
 	}
@@ -45,7 +45,7 @@ func loadTodos() ([]*proto.Todo, error) {
 	}
 	var ts []*proto.Todo
 	if err := json.Unmarshal(data, &ts); err != nil {
-		_ = ioutil.WriteFile(filePath, []byte("[]"), 0644)
+		_ = ioutil.WriteFile(filePath, []byte("[]"), 0600)
 		return []*proto.Todo{}, nil
 	}
 	return ts, nil
@@ -57,7 +57,7 @@ func saveTodos(todosSlice []*proto.Todo) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filePath, out, 0644)
+	return ioutil.WriteFile(filePath, out, 0600)
 }
 
 func newTodoServer() (*todoServer, error) {

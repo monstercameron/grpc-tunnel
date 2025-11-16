@@ -5,6 +5,7 @@ package grpctunnel
 import (
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/http2"
@@ -119,7 +120,13 @@ func Wrap(grpcServer *grpc.Server, opts ...ServerOption) http.Handler {
 //	lis, _ := net.Listen("tcp", ":8080")
 //	grpctunnel.Serve(lis, grpcServer)
 func Serve(listener net.Listener, grpcServer *grpc.Server, opts ...ServerOption) error {
-	return http.Serve(listener, Wrap(grpcServer, opts...))
+	server := &http.Server{
+		Handler:      Wrap(grpcServer, opts...),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return server.Serve(listener)
 }
 
 // ListenAndServe listens on the TCP network address and serves gRPC over WebSocket.
@@ -131,5 +138,12 @@ func Serve(listener net.Listener, grpcServer *grpc.Server, opts ...ServerOption)
 //	proto.RegisterYourServiceServer(grpcServer, &yourImpl{})
 //	grpctunnel.ListenAndServe(":8080", grpcServer)
 func ListenAndServe(addr string, grpcServer *grpc.Server, opts ...ServerOption) error {
-	return http.ListenAndServe(addr, Wrap(grpcServer, opts...))
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      Wrap(grpcServer, opts...),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return server.ListenAndServe()
 }
