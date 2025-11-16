@@ -1,0 +1,43 @@
+linters-settings:
+  errcheck:
+    check-blank: false
+    check-type-assertions: false
+
+  staticcheck:
+    checks: ["all", "-SA1019"] # Ignore deprecation warnings for now
+
+  unused:
+    check-exported: false
+    local-variables-are-used: false # Allow unused vars that may be used later
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - gofmt
+    - goimports
+
+  disable:
+    - unused # Disable unused check for now - some code is kept for future use
+    - typecheck # Already handled by go build
+
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  exclude-rules:
+    # Ignore all errcheck in test files
+    - path: _test\.go
+      linters:
+        - errcheck
+    
+    # Ignore all errcheck in e2e tests
+    - path: e2e/
+      linters:
+        - errcheck
+        - ineffassign
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

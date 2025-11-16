@@ -53,7 +53,7 @@ func inferBrowserWebSocketURL(target string) string {
 
 	// Get host (includes port if present)
 	host := location.Get("host").String()
-	
+
 	// If target is empty, connect to same host
 	if target == "" {
 		return fmt.Sprintf("%s://%s", scheme, host)
@@ -69,7 +69,7 @@ func inferBrowserWebSocketURL(target string) string {
 }
 
 // Dial creates a gRPC client connection over WebSocket in the browser.
-// 
+//
 // The target can be:
 //   - Empty "" - automatically uses current page's host (ws://current-host or wss://current-host)
 //   - A path "/grpc" - uses current host + path (ws://current-host/grpc)

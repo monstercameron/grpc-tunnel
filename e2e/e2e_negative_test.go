@@ -64,7 +64,7 @@ func TestServerUnavailable(t *testing.T) {
 		text := msg.Text()
 		t.Logf("[Browser Console] %s", text)
 		consoleMessages <- text
-		
+
 		if msg.Type() == "error" || strings.Contains(strings.ToLower(text), "error") ||
 			strings.Contains(strings.ToLower(text), "failed") {
 			errorMessages <- text
@@ -82,7 +82,7 @@ func TestServerUnavailable(t *testing.T) {
 	for {
 		select {
 		case msg := <-errorMessages:
-			if strings.Contains(strings.ToLower(msg), "connection") || 
+			if strings.Contains(strings.ToLower(msg), "connection") ||
 				strings.Contains(strings.ToLower(msg), "refused") ||
 				strings.Contains(strings.ToLower(msg), "failed") {
 				t.Logf("Expected error received: %s", msg)
@@ -146,7 +146,7 @@ func TestRapidConnectDisconnect(t *testing.T) {
 	cycles := 5
 	for i := 0; i < cycles; i++ {
 		t.Logf("Connection cycle %d/%d", i+1, cycles)
-		
+
 		page, err := browser.NewPage()
 		if err != nil {
 			t.Fatalf("Failed to create page: %v", err)
@@ -231,7 +231,7 @@ func TestServerRestartDuringConnection(t *testing.T) {
 	page.On("console", func(msg playwright.ConsoleMessage) {
 		text := msg.Text()
 		t.Logf("[Browser Console] %s", text)
-		
+
 		if msg.Type() == "error" || strings.Contains(strings.ToLower(text), "error") {
 			errorsSeen <- text
 		}
@@ -260,7 +260,7 @@ func TestServerRestartDuringConnection(t *testing.T) {
 	t.Log("Restarting bridge server...")
 	bridgeCleanup = startCommand(t, projectRoot, "DirectBridge-Restarted", "go", "run", directBridgePath)
 	t.Cleanup(bridgeCleanup)
-	
+
 	time.Sleep(3 * time.Second)
 	t.Log("Server restart test completed - manual verification may be needed for full reconnection")
 }
@@ -282,7 +282,7 @@ func TestInvalidWebSocketUpgrade(t *testing.T) {
 	// Try to make a regular HTTP request to the WebSocket endpoint
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://localhost:5000")
-	
+
 	if err != nil {
 		t.Logf("Expected error on non-WebSocket request: %v", err)
 		return
@@ -290,7 +290,7 @@ func TestInvalidWebSocketUpgrade(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Should get an error or upgrade required status
-	if resp.StatusCode == http.StatusBadRequest || 
+	if resp.StatusCode == http.StatusBadRequest ||
 		resp.StatusCode == http.StatusUpgradeRequired ||
 		resp.StatusCode >= 400 {
 		t.Logf("Server correctly rejected non-WebSocket request with status: %d", resp.StatusCode)
@@ -444,7 +444,7 @@ func TestNetworkTimeout(t *testing.T) {
 	page.On("console", func(msg playwright.ConsoleMessage) {
 		text := msg.Text()
 		t.Logf("[Browser Console] %s", text)
-		
+
 		if strings.Contains(strings.ToLower(text), "timeout") {
 			timeoutSeen = true
 		}
@@ -456,7 +456,7 @@ func TestNetworkTimeout(t *testing.T) {
 
 	// Wait and check for timeout messages
 	time.Sleep(8 * time.Second)
-	
+
 	if timeoutSeen {
 		t.Log("Timeout handling verified")
 	} else {

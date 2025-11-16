@@ -50,7 +50,7 @@ func (s *mockTodoService) StreamTodos(req *proto.StreamTodosRequest, stream prot
 		{Id: "2", Text: "Second Todo", Done: true},
 		{Id: "3", Text: "Third Todo", Done: false},
 	}
-	
+
 	for _, todo := range todos {
 		if err := stream.Send(&proto.StreamTodosResponse{Todo: todo}); err != nil {
 			return err
@@ -85,7 +85,7 @@ func (s *mockTodoService) SyncTodos(stream proto.TodoService_SyncTodosServer) er
 			}
 			return err
 		}
-		
+
 		// Echo back results
 		switch action := req.Action.(type) {
 		case *proto.SyncRequest_Create:
@@ -426,7 +426,7 @@ func TestIntegration_ServerStreaming(t *testing.T) {
 	defer conn.Close()
 
 	client := proto.NewTodoServiceClient(conn)
-	
+
 	stream, err := client.StreamTodos(ctx, &proto.StreamTodosRequest{})
 	if err != nil {
 		t.Fatalf("StreamTodos failed: %v", err)
@@ -484,7 +484,7 @@ func TestIntegration_ClientStreaming(t *testing.T) {
 	defer conn.Close()
 
 	client := proto.NewTodoServiceClient(conn)
-	
+
 	stream, err := client.BulkCreateTodos(ctx)
 	if err != nil {
 		t.Fatalf("BulkCreateTodos failed: %v", err)
@@ -539,7 +539,7 @@ func TestIntegration_BidirectionalStreaming(t *testing.T) {
 	defer conn.Close()
 
 	client := proto.NewTodoServiceClient(conn)
-	
+
 	stream, err := client.SyncTodos(ctx)
 	if err != nil {
 		t.Fatalf("SyncTodos failed: %v", err)
@@ -548,7 +548,7 @@ func TestIntegration_BidirectionalStreaming(t *testing.T) {
 	// Test bidirectional streaming by sending and receiving concurrently
 	done := make(chan bool)
 	responses := []*proto.SyncResponse{}
-	
+
 	// Receiver goroutine
 	go func() {
 		for {
@@ -567,13 +567,13 @@ func TestIntegration_BidirectionalStreaming(t *testing.T) {
 			Create: &proto.CreateTodoRequest{Text: "Bidirectional test"},
 		},
 	})
-	
+
 	stream.Send(&proto.SyncRequest{
 		Action: &proto.SyncRequest_Update{
 			Update: &proto.UpdateTodoRequest{Id: "123", Text: "Updated", Done: true},
 		},
 	})
-	
+
 	stream.Send(&proto.SyncRequest{
 		Action: &proto.SyncRequest_Delete{
 			Delete: &proto.DeleteTodoRequest{Id: "456"},
@@ -738,7 +738,7 @@ func TestIntegration_Cancellation(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error after context cancellation, got nil")
 	}
-	
+
 	if err != nil && err != context.Canceled && !isContextCanceledError(err) {
 		t.Logf("Got error after cancellation: %v (type: %T)", err, err)
 	}
@@ -800,7 +800,7 @@ func TestIntegration_Backpressure(t *testing.T) {
 			t.Fatalf("Recv failed: %v", err)
 		}
 		receivedCount++
-		
+
 		// Simulate slow consumer
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -884,7 +884,7 @@ func TestIntegration_GrpcTunnel_Unary(t *testing.T) {
 	defer conn.Close()
 
 	client := proto.NewTodoServiceClient(conn)
-	
+
 	resp, err := client.CreateTodo(ctx, &proto.CreateTodoRequest{Text: "Test with grpctunnel"})
 	if err != nil {
 		t.Fatalf("CreateTodo failed: %v", err)

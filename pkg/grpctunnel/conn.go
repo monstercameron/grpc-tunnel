@@ -14,11 +14,11 @@ import (
 // webSocketConn adapts a WebSocket connection to net.Conn interface.
 // This is needed because gRPC expects a net.Conn but browsers only have WebSocket.
 type webSocketConn struct {
-	ws         *websocket.Conn
-	reader     io.Reader
-	closeOnce  sync.Once
-	closed     bool
-	closedMu   sync.RWMutex
+	ws        *websocket.Conn
+	reader    io.Reader
+	closeOnce sync.Once
+	closed    bool
+	closedMu  sync.RWMutex
 }
 
 func newWebSocketConn(ws *websocket.Conn) net.Conn {

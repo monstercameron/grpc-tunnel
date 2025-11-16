@@ -11,7 +11,7 @@ import (
 
 const (
 	// JavaScript API names
-	jsGlobalWebSocket = "WebSocket"
+	jsGlobalWebSocket  = "WebSocket"
 	jsGlobalUint8Array = "Uint8Array"
 	jsGlobalObject     = "Object"
 
@@ -100,9 +100,9 @@ type browserWebSocketConnection struct {
 func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 	connection := &browserWebSocketConnection{
 		browserWebSocket:        browserWebSocket,
-		incomingMessagesChannel: make(chan []byte, 10),    // Buffered to prevent blocking event handlers
-		incomingErrorsChannel:   make(chan error, 2),      // Buffered to prevent blocking error handlers
-		outgoingMessagesChannel: make(chan []byte),        // Initialize for potential future use
+		incomingMessagesChannel: make(chan []byte, 10), // Buffered to prevent blocking event handlers
+		incomingErrorsChannel:   make(chan error, 2),   // Buffered to prevent blocking error handlers
+		outgoingMessagesChannel: make(chan []byte),     // Initialize for potential future use
 		closed:                  false,
 	}
 

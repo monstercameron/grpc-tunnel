@@ -83,18 +83,18 @@ func startCommand(t *testing.T, projectRoot, name string, command string, args .
 			// Kill by image name
 			exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq direct-bridge.exe").Run()
 			exec.Command("powershell", "-Command", "Get-Process -Name 'direct-bridge' -ErrorAction SilentlyContinue | Stop-Process -Force").Run()
-			
+
 			// Find and kill process using port 5000
-			exec.Command("powershell", "-Command", 
+			exec.Command("powershell", "-Command",
 				"(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }").Run()
-		
+
 		case "linux", "darwin":
 			// Kill by process name
 			exec.Command("pkill", "-9", "-f", "direct-bridge").Run()
-			
+
 			// Find and kill process using port 5000
 			exec.Command("sh", "-c", "lsof -ti:5000 | xargs kill -9 2>/dev/null").Run()
-		
+
 		default:
 			t.Logf("Unsupported OS: %s, skipping additional cleanup", runtime.GOOS)
 		}

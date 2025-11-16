@@ -13,7 +13,7 @@ func TestInferBrowserWebSocketURL_EmptyTarget(t *testing.T) {
 	// In a real browser, this would use window.location
 	// In test environment, we test the fallback
 	result := inferBrowserWebSocketURL("")
-	
+
 	// Should have a valid URL (either from location or fallback)
 	if result == "" {
 		t.Error("Expected non-empty URL")
@@ -42,7 +42,7 @@ func TestInferBrowserWebSocketURL_FullURL(t *testing.T) {
 
 func TestInferBrowserWebSocketURL_HostPort(t *testing.T) {
 	result := inferBrowserWebSocketURL("localhost:8080")
-	
+
 	// Should add ws:// or wss:// prefix
 	if result != "ws://localhost:8080" && result != "wss://localhost:8080" {
 		t.Logf("Got: %s (acceptable with browser protocol inference)", result)

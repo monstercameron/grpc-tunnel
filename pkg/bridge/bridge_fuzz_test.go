@@ -21,7 +21,7 @@ func FuzzWebSocketConnWrite(f *testing.F) {
 
 		// Should not panic
 		err := mock.WriteMessage(1, data)
-		
+
 		if err == nil && len(mock.writeMessages) != 1 {
 			t.Errorf("Write should have 1 message")
 		}
@@ -52,7 +52,7 @@ func FuzzWebSocketConnRead(f *testing.F) {
 		}()
 
 		msgType, msgData, err := mock.ReadMessage()
-		
+
 		if err == nil {
 			if len(msgData) != len(data) {
 				t.Errorf("Read returned %d bytes, expected %d", len(msgData), len(data))

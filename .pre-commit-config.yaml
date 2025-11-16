@@ -1,0 +1,32 @@
+# Pre-commit hooks for grpc-tunnel
+
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.8
+    hooks:
+      - id: golangci-lint
+        args: ['--config=.golangci.yml']
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt -w -s
+        language: system
+        files: \.go$
+        
+      - id: go-test
+        name: go test
+        entry: go test ./pkg/... -short
+        language: system
+        pass_filenames: false

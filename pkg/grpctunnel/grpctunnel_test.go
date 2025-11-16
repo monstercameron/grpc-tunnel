@@ -82,7 +82,6 @@ func (s *mockService) SyncTodos(stream proto.TodoService_SyncTodosServer) error 
 	}
 }
 
-
 func TestWrap(t *testing.T) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
@@ -386,4 +385,3 @@ func TestWrap_OriginRejection(t *testing.T) {
 		t.Log("Connection succeeded but origin check should prevent WebSocket upgrade")
 	}
 }
-

@@ -53,11 +53,11 @@ func TestBrowserWebSocket_NetworkError(t *testing.T) {
 // TestBrowserWebSocket_LargeMessage tests handling of large messages
 func TestBrowserWebSocket_LargeMessage(t *testing.T) {
 	sizes := []int{
-		1024,      // 1KB
-		10240,     // 10KB
-		102400,    // 100KB
-		1024000,   // 1MB
-		10240000,  // 10MB
+		1024,     // 1KB
+		10240,    // 10KB
+		102400,   // 100KB
+		1024000,  // 1MB
+		10240000, // 10MB
 	}
 
 	for _, size := range sizes {
