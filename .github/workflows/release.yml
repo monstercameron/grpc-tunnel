@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Build release binaries
+      run: |
+        # Create output directory
+        mkdir -p dist
+        
+        # Build for multiple platforms
+        platforms=(
+          "linux/amd64"
+          "linux/arm64"
+          "darwin/amd64"
+          "darwin/arm64"
+          "windows/amd64"
+        )
+        
+        for platform in "${platforms[@]}"; do
+          os="${platform%/*}"
+          arch="${platform#*/}"
+          
+          output_bridge="dist/grpc-tunnel-bridge-${os}-${arch}"
+          output_server="dist/grpc-tunnel-server-${os}-${arch}"
+          
+          if [ "$os" = "windows" ]; then
+            output_bridge="${output_bridge}.exe"
+            output_server="${output_server}.exe"
+          fi
+          
+          echo "Building for $os/$arch..."
+          
+          GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
+            -o "$output_bridge" ./cmd/bridge
+          
+          GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
+            -o "$output_server" ./cmd/server
+        done
+        
+        # Build WASM client
+        GOOS=js GOARCH=wasm go build -o dist/main.wasm ./client
+        
+        # Create archives
+        cd dist
+        for file in grpc-tunnel-*; do
+          if [[ $file == *.exe ]]; then
+            zip "${file%.exe}.zip" "$file"
+          else
+            tar czf "${file}.tar.gz" "$file"
+          fi
+        done
+        
+        # Archive WASM
+        tar czf grpc-tunnel-wasm.tar.gz main.wasm
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## Changes
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Installation
+          
+          Download the appropriate binary for your platform:
+          - Linux (amd64/arm64)
+          - macOS (amd64/arm64)
+          - Windows (amd64)
+          
+          ### Bridge Server
+          ```bash
+          # Linux/macOS
+          tar xzf grpc-tunnel-bridge-<os>-<arch>.tar.gz
+          chmod +x grpc-tunnel-bridge-<os>-<arch>
+          ./grpc-tunnel-bridge-<os>-<arch>
+          
+          # Windows
+          unzip grpc-tunnel-bridge-windows-amd64.zip
+          grpc-tunnel-bridge-windows-amd64.exe
+          ```
+          
+          ### gRPC Server
+          ```bash
+          # Linux/macOS
+          tar xzf grpc-tunnel-server-<os>-<arch>.tar.gz
+          chmod +x grpc-tunnel-server-<os>-<arch>
+          ./grpc-tunnel-server-<os>-<arch>
+          
+          # Windows
+          unzip grpc-tunnel-server-windows-amd64.zip
+          grpc-tunnel-server-windows-amd64.exe
+          ```
+          
+          ### WASM Client
+          ```bash
+          tar xzf grpc-tunnel-wasm.tar.gz
+          # Deploy main.wasm with your web application
+          ```
+        files: |
+          dist/*.tar.gz
+          dist/*.zip
+        draft: false
+        prerelease: false
+
+  docker-release:
+    name: Release Docker Images
+    runs-on: ubuntu-latest
+    needs: release
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+      continue-on-error: true
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Build and push bridge image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.bridge
+        push: true
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ghcr.io/${{ github.repository }}/bridge:latest
+          ghcr.io/${{ github.repository }}/bridge:${{ steps.get_version.outputs.VERSION }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      continue-on-error: true
+
+    - name: Build and push server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.server
+        push: true
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ghcr.io/${{ github.repository }}/server:latest
+          ghcr.io/${{ github.repository }}/server:${{ steps.get_version.outputs.VERSION }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      continue-on-error: true

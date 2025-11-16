@@ -1,0 +1,105 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.24.x']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build bridge server
+      run: go build -v -o bin/bridge${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/bridge
+
+    - name: Build example server
+      run: go build -v -o bin/server${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/server
+
+    - name: Build WASM client (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        GOOS=js GOARCH=wasm go build -o public/main.wasm ./client
+
+    - name: Build WASM client (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $env:GOOS = "js"
+        $env:GOARCH = "wasm"
+        go build -o public/main.wasm ./client
+
+    - name: Verify binaries exist
+      shell: bash
+      run: |
+        ls -la bin/
+        ls -la public/ || true
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-${{ matrix.os }}-go${{ matrix.go-version }}
+        path: |
+          bin/*
+          public/main.wasm
+        retention-days: 7
+
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build bridge image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.bridge
+        push: false
+        tags: grpc-tunnel/bridge:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      continue-on-error: true
+
+    - name: Build server image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.server
+        push: false
+        tags: grpc-tunnel/server:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      continue-on-error: true
