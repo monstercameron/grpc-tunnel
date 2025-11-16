@@ -1,49 +1,39 @@
 # GoGRPCBridge
 
-**Bring the power of gRPC to your web browser.** 
+> **Native gRPC in the browser.** Type-safe streaming from WebAssembly clients to your Go backend.
 
-Stop fighting with REST endpoints, JSON serialization, and HTTP polling. Use real gRPC with bidirectional streaming, type-safe Protobuf messages, and efficient binary protocols—directly from your browser via WebAssembly.
+Modern web development shouldn't force you to choose between developer experience and browser compatibility. GoGRPCBridge brings the full power of gRPC—bidirectional streaming, type safety, and efficient binary protocols—to WebAssembly clients through a simple WebSocket tunnel.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/monstercameron/GoGRPCBridge.svg)](https://pkg.go.dev/github.com/monstercameron/GoGRPCBridge)
 [![Go Report Card](https://goreportcard.com/badge/github.com/monstercameron/GoGRPCBridge)](https://goreportcard.com/report/github.com/monstercameron/GoGRPCBridge)
 [![Build](https://github.com/monstercameron/GoGRPCBridge/workflows/Build/badge.svg)](https://github.com/monstercameron/GoGRPCBridge/actions/workflows/build.yml)
 [![Test](https://github.com/monstercameron/GoGRPCBridge/workflows/Test/badge.svg)](https://github.com/monstercameron/GoGRPCBridge/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/monstercameron/GoGRPCBridge)](https://go.dev/)
-[![Release](https://img.shields.io/github/v/tag/monstercameron/GoGRPCBridge?label=release)](https://github.com/monstercameron/GoGRPCBridge/releases)
 
 ---
 
-## 🎯 Why You Need This
+## What This Solves
 
-Building modern web applications means choosing between developer experience and user experience. REST gives you browser compatibility but loses type safety, streaming, and efficiency. gRPC gives you everything except browser support.
+You're building a web application. You want the benefits of gRPC—type safety, streaming, efficiency—but browsers don't speak HTTP/2. Your options are limited:
 
-**Until now.**
+- **REST APIs**: Lose type safety, streaming, and efficiency. Write serializers manually.
+- **gRPC-Web**: Limited to unary and server streaming. Requires Envoy proxy. No bidirectional streams.
+- **WebSocket + Custom Protocol**: Reinvent the wheel. Maintain your own serialization.
 
-GoGRPCBridge tunnels native gRPC through WebSocket, giving you:
+**GoGRPCBridge** gives you a better path: your existing gRPC services work in the browser, unchanged. No proxies, no protocol translation, no compromises.
 
-### What You Get
+## Key Features
 
-✅ **Real-time bidirectional streaming** - Build chat apps, live dashboards, and collaborative tools without HTTP polling  
-✅ **Type-safe contracts** - Your Protobuf definitions work across frontend and backend  
-✅ **4-8x smaller payloads** - Binary Protobuf vs JSON  
-✅ **No REST boilerplate** - Stop writing serializers, validators, and HTTP handlers  
-✅ **Standard gRPC tooling** - Use protoc, grpc-gateway, and existing libraries  
-✅ **One codebase** - Same gRPC services for web, mobile, and backend microservices
-
-### What gRPC-Web Can't Do (But We Can)
-
-| Feature | gRPC-Web | GoGRPCBridge |
-|---------|----------|--------------|
-| Bidirectional streaming | ❌ | ✅ |
-| Works with any gRPC server | ❌ Needs Envoy | ✅ |
-| Zero protocol translation | ❌ | ✅ |
-| Standard HTTP/2 frames | ❌ | ✅ |
-| Firewall friendly | ✅ | ✅ |
+✨ **Bidirectional Streaming** – Real-time chat, live collaboration, streaming analytics  
+🔒 **Type Safety** – Protobuf contracts prevent runtime errors  
+📦 **Efficient** – Binary protocol, 4-8x smaller than JSON  
+🎯 **Zero Boilerplate** – One function call to bridge your gRPC server  
+🔧 **Standard gRPC** – Works with existing services, no modifications needed  
+🌐 **Browser Native** – WebAssembly client with full gRPC capabilities
 
 ---
 
-## 🚀 Get Started in 60 Seconds
+## Quick Start
 
 ### 1. Install
 
@@ -51,34 +41,30 @@ GoGRPCBridge tunnels native gRPC through WebSocket, giving you:
 go get github.com/monstercameron/GoGRPCBridge
 ```
 
-### 2. Define Your Service (Protobuf)
+### 2. Define Your Service
 
 ```protobuf
 syntax = "proto3";
+package chat;
 
 service ChatService {
-  // Bidirectional streaming - impossible with REST!
-  rpc LiveChat(stream ChatMessage) returns (stream ChatMessage);
-  
-  // Server streaming - real-time updates
-  rpc SubscribeToUpdates(SubscribeRequest) returns (stream Update);
+  // Bidirectional streaming - real-time chat
+  rpc LiveChat(stream Message) returns (stream Message);
 }
 
-message ChatMessage {
+message Message {
   string user = 1;
-  string message = 2;
+  string text = 2;
   int64 timestamp = 3;
 }
 ```
 
-**Why Protobuf?**
-- 🔒 Type safety prevents runtime errors
-- 📦 4-8x smaller than JSON (binary encoding)
-- ⚡ 2-3x faster serialization
-- 🔄 Backward/forward compatible
-- 📝 Auto-generated code for 11+ languages
+Generate code:
+```bash
+protoc --go_out=. --go-grpc_out=. chat.proto
+```
 
-### 3. Server Setup (One Function Call)
+### 3. Server Setup (One Line)
 
 ```go
 package main
@@ -91,187 +77,17 @@ import (
 func main() {
     // Your existing gRPC server
     grpcServer := grpc.NewServer()
-    proto.RegisterChatServiceServer(grpcServer, &chatServiceImpl{})
+    chat.RegisterChatServiceServer(grpcServer, &chatServer{})
     
-    // That's it - gRPC is now accessible via WebSocket
+    // Make it accessible via WebSocket - that's it!
     grpctunnel.ListenAndServe(":8080", grpcServer)
 }
 ```
 
-### 4. Browser Client (WebAssembly)
-
-```go
-package main
-
-import (
-    "context"
-    "github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
-    "google.golang.org/grpc"
-)
-
-func main() {
-    // Automatically uses current page's host
-    conn, _ := grpctunnel.Dial("", 
-        grpc.WithTransportCredentials(insecure.NewCredentials()))
-    
-    client := proto.NewChatServiceClient(conn)
-    
-    // Full bidirectional streaming in the browser!
-    stream, _ := client.LiveChat(context.Background())
-    stream.Send(&proto.ChatMessage{User: "Alice", Message: "Hello!"})
-    response, _ := stream.Recv()
-}
-```
-
-**Build for WASM:**
-```bash
-GOOS=js GOARCH=wasm go build -o main.wasm
-```
-
----
-
-## 💡 Why gRPC Changes Everything
-
-### The Problem with REST
-
-```javascript
-// REST: Manual serialization, no streaming, polling for updates
-fetch('/api/messages', {
-  method: 'POST',
-  body: JSON.stringify({ user: 'Alice', message: 'Hello' })
-})
-.then(r => r.json())
-.then(data => {
-  // Poll every second for new messages 😞
-  setInterval(() => fetch('/api/messages').then(...), 1000)
-})
-```
-
-**Issues:**
-- ❌ No type safety (runtime errors from typos)
-- ❌ HTTP polling wastes bandwidth and delays updates
-- ❌ Manual JSON serialization prone to errors
-- ❌ No streaming (upload/download must complete)
-- ❌ Different API for each platform
-
-### The gRPC Way
-
-```go
-// gRPC: Type-safe, bidirectional, real-time
-stream, _ := client.LiveChat(ctx)
-
-// Send messages
-go func() {
-    stream.Send(&proto.ChatMessage{
-        User: "Alice",
-        Message: "Hello",
-    })
-}()
-
-// Receive in real-time (no polling!)
-for {
-    msg, _ := stream.Recv()
-    fmt.Printf("%s: %s\n", msg.User, msg.Message)
-}
-```
-
-**Benefits:**
-- ✅ Compiler catches typos and type errors
-- ✅ Real-time bidirectional streaming
-- ✅ Auto-generated serialization (Protobuf)
-- ✅ Efficient binary protocol (4-8x smaller)
-- ✅ Same service definition for web, mobile, backend
-
-### Real-World Impact
-
-**Chat Application:**
-- REST: Poll every 1s = 3,600 requests/hour per user
-- gRPC: 1 persistent connection = instant delivery
-
-**Large Dataset (1MB):**
-- JSON: ~1,000 KB
-- Protobuf: ~250 KB (75% reduction)
-
-**Development Time:**
-- REST: Write serializers, validators, HTTP handlers for each endpoint
-- gRPC: `protoc` generates everything from one .proto file
-
----
-
-## 📚 Getting Started Guide
-
-### Step 1: Define Your API Contract
-
-Create `api/service.proto`:
-
-```protobuf
-syntax = "proto3";
-option go_package = "myapp/proto";
-
-service TodoService {
-  rpc CreateTodo(CreateTodoRequest) returns (Todo);
-  rpc ListTodos(ListTodosRequest) returns (stream Todo);  // Server streaming!
-  rpc SyncTodos(stream Todo) returns (stream Todo);       // Bidirectional!
-}
-
-message Todo {
-  string id = 1;
-  string text = 2;
-  bool done = 3;
-}
-```
-
-**Generate code:**
-```bash
-protoc --go_out=. --go-grpc_out=. api/service.proto
-```
-
-### Step 2: Implement Your Service
-
-```go
-type todoServer struct {
-    proto.UnimplementedTodoServiceServer
-    todos []*proto.Todo
-}
-
-func (s *todoServer) CreateTodo(ctx context.Context, req *proto.CreateTodoRequest) (*proto.Todo, error) {
-    todo := &proto.Todo{
-        Id:   uuid.New().String(),
-        Text: req.Text,
-        Done: false,
-    }
-    s.todos = append(s.todos, todo)
-    return todo, nil
-}
-
-func (s *todoServer) ListTodos(req *proto.ListTodosRequest, stream proto.TodoService_ListTodosServer) error {
-    // Server streaming - send todos as they're ready
-    for _, todo := range s.todos {
-        if err := stream.Send(todo); err != nil {
-            return err
-        }
-    }
-    return nil
-}
-```
-
-### Step 3: Start Your Server
-
-```go
-func main() {
-    grpcServer := grpc.NewServer()
-    proto.RegisterTodoServiceServer(grpcServer, &todoServer{})
-    
-    // Bridge makes it accessible via WebSocket
-    grpctunnel.ListenAndServe(":8080", grpcServer)
-}
-```
-
-### Step 4: Build Your WASM Client
+### 4. Browser Client (WASM)
 
 ```go
 //go:build js && wasm
-
 package main
 
 import (
@@ -281,31 +97,31 @@ import (
 )
 
 func main() {
+    // Connect to bridge (uses current page's host automatically)
     conn, _ := grpctunnel.Dial("", grpc.WithInsecure())
-    client := proto.NewTodoServiceClient(conn)
+    client := chat.NewChatServiceClient(conn)
     
-    // Create todo
-    todo, _ := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-        Text: "Learn gRPC",
+    // Full bidirectional streaming in the browser!
+    stream, _ := client.LiveChat(context.Background())
+    
+    // Send messages
+    stream.Send(&chat.Message{
+        User: "Alice",
+        Text: "Hello from the browser!",
     })
     
-    // Stream todos in real-time
-    stream, _ := client.ListTodos(context.Background(), &proto.ListTodosRequest{})
-    for {
-        todo, err := stream.Recv()
-        if err != nil {
-            break
-        }
-        println(todo.Text)
-    }
+    // Receive in real-time
+    msg, _ := stream.Recv()
+    println(msg.Text)
 }
 ```
 
+Build for browser:
 ```bash
 GOOS=js GOARCH=wasm go build -o app.wasm
 ```
 
-### Step 5: Serve Your WASM App
+### 5. Serve Your App
 
 ```html
 <!DOCTYPE html>
@@ -319,214 +135,568 @@ GOOS=js GOARCH=wasm go build -o app.wasm
     </script>
 </head>
 <body>
-    <h1>gRPC in the Browser!</h1>
-    <!-- Your WASM app runs here -->
+    <h1>gRPC Chat</h1>
+    <div id="messages"></div>
 </body>
 </html>
 ```
 
-**That's it!** You now have type-safe, streaming gRPC running in the browser.
+**That's it!** You now have bidirectional gRPC streaming running in the browser.
 
 ---
 
-## 🏗️ Production Examples
+## Why gRPC?
 
-The `examples/` directory contains complete, runnable applications demonstrating real-world usage:
+### The REST Approach
 
-| Example | Use Case | Key Features |
-|---------|----------|--------------|
-| **direct-bridge** | All-in-one server | Embedded gRPC + WebSocket in single process |
-| **production-bridge** | Enterprise deployment | TLS, origin validation, monitoring hooks |
-| **custom-router** | Hybrid HTTP/gRPC API | Integrate with existing HTTP servers |
-| **wasm-client** | Browser application | Full WASM client with streaming |
-| **grpc-server** | Backend service | Standard gRPC server example |
+```javascript
+// REST: Manual serialization, polling, no streaming
+async function sendMessage(text) {
+    await fetch('/api/messages', {
+        method: 'POST',
+        body: JSON.stringify({ user: 'Alice', text: text })
+    });
+    
+    // Poll for new messages every second
+    setInterval(async () => {
+        const response = await fetch('/api/messages');
+        const messages = await response.json();
+        updateUI(messages);
+    }, 1000);
+}
+```
 
-[**View all examples →**](./examples/)
+Problems:
+- ❌ No type safety (runtime errors from typos)
+- ❌ Polling wastes bandwidth, delays updates
+- ❌ Manual JSON serialization
+- ❌ No streaming capabilities
+- ❌ Separate implementation per platform
 
----
-
-## 🛡️ Battle-Tested
-
-- ✅ 85%+ test coverage
-- ✅ Race detector clean
-- ✅ Fuzz tested (4 billion+ inputs)
-- ✅ E2E browser tests (Playwright)
-- ✅ Zero high-severity security issues
-- ✅ Production-ready configuration examples
-
----
-
-## 📊 Benchmarks
-
-*Coming soon - PR welcome!*
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
-- Development workflow
-- Pre-commit hooks
-- Testing guidelines
-- Security scan details
-
----
-
-## 📜 License
-
-MIT License - Build commercial and open-source projects freely.
-
----
-
-## 🌟 Support This Project
-
-If GoGRPCBridge helps your project, please:
-- ⭐ **Star this repository**
-- 🐦 **Share on social media**
-- 💬 **Tell your team**
-- 🙏 **Contribute improvements**
-
-**Built with ❤️ by developers, for developers.**
-
----
-
-## 🏗️ Production Examples
-
-The `examples/` directory contains complete, runnable applications demonstrating real-world usage:
-
-| Example | Use Case | Key Features |
-|---------|----------|--------------|
-| **direct-bridge** | All-in-one server | Embedded gRPC + WebSocket in single process |
-| **production-bridge** | Enterprise deployment | TLS, origin validation, monitoring hooks |
-| **custom-router** | Hybrid HTTP/gRPC API | Integrate with existing HTTP servers |
-| **wasm-client** | Browser application | Full WASM client with streaming |
-| **grpc-server** | Backend service | Standard gRPC server example |
-
-[**View all examples →**](./examples/)
-
----
-
-## ⚙️ Advanced Configuration
-
-### Server Options
+### The gRPC Way
 
 ```go
-import "github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
+// gRPC: Type-safe, bidirectional, real-time
+stream, _ := client.LiveChat(ctx)
 
-server := &http.Server{
-    Addr: ":8443",
-    Handler: grpctunnel.Wrap(grpcServer,
-        // Validate request origins (CORS)
-        grpctunnel.WithOriginCheck(func(r *http.Request) bool {
-            origin := r.Header.Get("Origin")
-            return origin == "https://yourdomain.com"
-        }),
-        
-        // Connection lifecycle hooks
-        grpctunnel.WithConnectHook(func(r *http.Request) {
-            log.Printf("Client connected: %s", r.RemoteAddr)
-        }),
-        grpctunnel.WithDisconnectHook(func(r *http.Request) {
-            log.Printf("Client disconnected: %s", r.RemoteAddr)
-        }),
-        
-        // Custom WebSocket buffer sizes
-        grpctunnel.WithReadBufferSize(16384),
-        grpctunnel.WithWriteBufferSize(16384),
-    ),
-    
-    // Security timeouts
-    ReadTimeout:  15 * time.Second,
-    WriteTimeout: 15 * time.Second,
-    IdleTimeout:  60 * time.Second,
+// Send messages
+stream.Send(&chat.Message{
+    User: "Alice",
+    Text: "Hello!",
+})
+
+// Receive in real-time (no polling!)
+for {
+    msg, _ := stream.Recv()
+    fmt.Printf("%s: %s\n", msg.User, msg.Text)
+}
+```
+
+Benefits:
+- ✅ Compiler catches errors before runtime
+- ✅ Real-time bidirectional streaming
+- ✅ Auto-generated serialization
+- ✅ 4-8x more efficient than JSON
+- ✅ Same code for web, mobile, backend
+
+### Real Impact
+
+**Chat Application:**
+- REST: 3,600 polling requests/hour per user
+- gRPC: 1 persistent connection, instant delivery
+
+**Payload Size (1MB dataset):**
+- JSON: ~1,000 KB
+- Protobuf: ~250 KB (75% smaller)
+
+**Development:**
+- REST: Write serializers, validators, HTTP handlers
+- gRPC: `protoc` generates everything from .proto file
+
+---
+
+## Complete Example: Todo App
+
+This guide walks you through building a complete application with server streaming and bidirectional communication.
+
+### Step 1: Define the API
+
+`api/todo.proto`:
+```protobuf
+syntax = "proto3";
+package todo;
+
+service TodoService {
+  rpc CreateTodo(CreateRequest) returns (Todo);
+  rpc ListTodos(ListRequest) returns (stream Todo);      // Server streaming
+  rpc SyncTodos(stream Todo) returns (stream Todo);      // Bidirectional
 }
 
-// TLS for production
-server.ListenAndServeTLS("cert.pem", "key.pem")
+message Todo {
+  string id = 1;
+  string text = 2;
+  bool completed = 3;
+}
+
+message CreateRequest {
+  string text = 1;
+}
+
+message ListRequest {}
+```
+
+Generate:
+```bash
+protoc --go_out=. --go-grpc_out=. api/todo.proto
+```
+
+### Step 2: Implement the Service
+
+```go
+type todoService struct {
+    todo.UnimplementedTodoServiceServer
+    todos []*todo.Todo
+    mu    sync.Mutex
+}
+
+func (s *todoService) CreateTodo(ctx context.Context, req *todo.CreateRequest) (*todo.Todo, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    
+    newTodo := &todo.Todo{
+        Id:        uuid.New().String(),
+        Text:      req.Text,
+        Completed: false,
+    }
+    s.todos = append(s.todos, newTodo)
+    return newTodo, nil
+}
+
+func (s *todoService) ListTodos(req *todo.ListRequest, stream todo.TodoService_ListTodosServer) error {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    
+    // Server streaming - send todos as they're ready
+    for _, t := range s.todos {
+        if err := stream.Send(t); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+
+func (s *todoService) SyncTodos(stream todo.TodoService_SyncTodosServer) error {
+    // Bidirectional streaming - sync state between clients
+    for {
+        todo, err := stream.Recv()
+        if err != nil {
+            return err
+        }
+        
+        // Broadcast to all clients (simplified)
+        if err := stream.Send(todo); err != nil {
+            return err
+        }
+    }
+}
+```
+
+### Step 3: Start the Server
+
+```go
+func main() {
+    grpcServer := grpc.NewServer()
+    todo.RegisterTodoServiceServer(grpcServer, &todoService{})
+    
+    log.Println("Starting gRPC-over-WebSocket bridge on :8080")
+    grpctunnel.ListenAndServe(":8080", grpcServer)
+}
+```
+
+### Step 4: Build the WASM Client
+
+```go
+//go:build js && wasm
+package main
+
+import (
+    "context"
+    "syscall/js"
+    "github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
+    "google.golang.org/grpc"
+)
+
+func main() {
+    conn, err := grpctunnel.Dial("", grpc.WithInsecure())
+    if err != nil {
+        panic(err)
+    }
+    defer conn.Close()
+    
+    client := todo.NewTodoServiceClient(conn)
+    
+    // Create todo
+    newTodo, _ := client.CreateTodo(context.Background(), &todo.CreateRequest{
+        Text: "Learn gRPC",
+    })
+    println("Created:", newTodo.Text)
+    
+    // Stream all todos
+    stream, _ := client.ListTodos(context.Background(), &todo.ListRequest{})
+    for {
+        todo, err := stream.Recv()
+        if err != nil {
+            break
+        }
+        println("Todo:", todo.Text)
+    }
+    
+    // Keep WASM app running
+    <-make(chan bool)
+}
+```
+
+Build:
+```bash
+GOOS=js GOARCH=wasm go build -o public/app.wasm
+```
+
+### Step 5: Create the Web Page
+
+`public/index.html`:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Todo App - gRPC in Browser</title>
+    <script src="wasm_exec.js"></script>
+</head>
+<body>
+    <h1>📝 Todo App (gRPC + WASM)</h1>
+    <div id="todos"></div>
+    
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("app.wasm"), go.importObject)
+            .then(result => {
+                go.run(result.instance);
+            });
+    </script>
+</body>
+</html>
+```
+
+Copy `wasm_exec.js` from your Go installation:
+```bash
+cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" public/
+```
+
+### Step 6: Run It
+
+```bash
+# Terminal 1: Start server
+go run server/main.go
+
+# Terminal 2: Serve static files
+python3 -m http.server 8081 --directory public
+```
+
+Visit `http://localhost:8081` - your gRPC client is now running in the browser!
+
+---
+
+## Production Configuration
+
+### Security Best Practices
+
+```go
+import (
+    "crypto/tls"
+    "log"
+    "net/http"
+    "time"
+    "github.com/monstercameron/GoGRPCBridge/pkg/bridge"
+)
+
+func main() {
+    grpcServer := grpc.NewServer()
+    // ... register services
+    
+    handler := bridge.NewHandler(bridge.Config{
+        TargetAddress: "localhost:50051", // Your gRPC server
+        
+        // Validate origins (CORS)
+        CheckOrigin: func(r *http.Request) bool {
+            origin := r.Header.Get("Origin")
+            allowed := []string{
+                "https://yourdomain.com",
+                "https://app.yourdomain.com",
+            }
+            for _, a := range allowed {
+                if origin == a {
+                    return true
+                }
+            }
+            return false
+        },
+        
+        // Monitor connections
+        OnConnect: func(r *http.Request) {
+            log.Printf("Client connected: %s", r.RemoteAddr)
+        },
+        OnDisconnect: func(r *http.Request) {
+            log.Printf("Client disconnected: %s", r.RemoteAddr)
+        },
+        
+        // Optimize buffers for your workload
+        ReadBufferSize:  16384,
+        WriteBufferSize: 16384,
+    })
+    
+    server := &http.Server{
+        Addr:    ":8443",
+        Handler: handler,
+        
+        // Security timeouts
+        ReadTimeout:       15 * time.Second,
+        WriteTimeout:      15 * time.Second,
+        IdleTimeout:       60 * time.Second,
+        ReadHeaderTimeout: 5 * time.Second,
+        
+        // TLS configuration
+        TLSConfig: &tls.Config{
+            MinVersion: tls.VersionTLS12,
+            CipherSuites: []uint16{
+                tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+            },
+        },
+    }
+    
+    log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
+}
 ```
 
 ### Production Checklist
 
-- ✅ Use TLS (`wss://` instead of `ws://`)
-- ✅ Set `CheckOrigin` to validate request origins
-- ✅ Configure HTTP timeouts (ReadTimeout, WriteTimeout, IdleTimeout)
-- ✅ Add monitoring via connection hooks
-- ✅ Implement rate limiting at the HTTP layer
-- ✅ Use appropriate buffer sizes for your payload sizes
-- ✅ Handle graceful shutdown
+- ✅ **TLS/SSL**: Use `wss://` instead of `ws://`
+- ✅ **Origin Validation**: Implement `CheckOrigin` to prevent unauthorized access
+- ✅ **Timeouts**: Configure all HTTP timeouts to prevent resource exhaustion
+- ✅ **Monitoring**: Add connection hooks for observability
+- ✅ **Rate Limiting**: Implement at HTTP layer or reverse proxy
+- ✅ **Buffer Tuning**: Adjust sizes based on your payload characteristics
+- ✅ **Graceful Shutdown**: Handle SIGTERM/SIGINT properly
 
 ---
 
-## 🛡️ Battle-Tested
+## Advanced Features
 
-- ✅ **85%+ test coverage** - Comprehensive unit and integration tests
-- ✅ **Race detector clean** - Zero data races in concurrent code
-- ✅ **Fuzz tested** - 4 billion+ inputs across 4 fuzzers
-- ✅ **E2E browser tests** - Playwright-based end-to-end validation
-- ✅ **Zero high-severity security issues** - Gosec scans on every commit
-- ✅ **Production examples** - Real-world configurations included
+### Custom HTTP Routing
 
-### Run Tests Yourself
+Integrate with existing HTTP servers:
+
+```go
+mux := http.NewServeMux()
+
+// Regular HTTP endpoints
+mux.HandleFunc("/health", healthHandler)
+mux.HandleFunc("/metrics", metricsHandler)
+
+// gRPC bridge on specific path
+grpcHandler := bridge.NewHandler(bridge.Config{
+    TargetAddress: "localhost:50051",
+})
+mux.Handle("/grpc", grpcHandler)
+
+http.ListenAndServe(":8080", mux)
+```
+
+### Multiple gRPC Services
+
+```go
+// Service 1: Chat
+chatServer := grpc.NewServer()
+chat.RegisterChatServiceServer(chatServer, &chatService{})
+
+// Service 2: Todos
+todoServer := grpc.NewServer()
+todo.RegisterTodoServiceServer(todoServer, &todoService{})
+
+// Separate bridges
+mux := http.NewServeMux()
+mux.Handle("/chat", bridge.NewHandler(bridge.Config{...}))
+mux.Handle("/todos", bridge.NewHandler(bridge.Config{...}))
+```
+
+### Client-Side Connection Options
+
+```go
+// Custom dialer with options
+conn, err := grpctunnel.Dial("wss://api.example.com:8443/grpc",
+    grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{...})),
+    grpc.WithBlock(),
+    grpc.WithTimeout(5*time.Second),
+)
+```
+
+---
+
+## Architecture & How It Works
+
+```
+┌─────────────────┐
+│  Browser        │
+│  ┌───────────┐  │
+│  │WASM Client│  │
+│  │  (Go)     │  │
+│  └─────┬─────┘  │
+│        │ gRPC   │
+│        │ calls  │
+└────────┼────────┘
+         │
+    WebSocket
+         │
+┌────────▼────────┐
+│  GoGRPCBridge   │
+│  ┌───────────┐  │
+│  │net.Conn   │  │──┐
+│  │Adapter    │  │  │ HTTP/2
+│  └───────────┘  │  │ frames
+└─────────────────┘  │
+                     │
+              ┌──────▼──────┐
+              │ gRPC Server │
+              │   (Go)      │
+              └─────────────┘
+```
+
+**Key Insight**: The bridge provides a transparent `net.Conn` interface backed by WebSocket. Your gRPC server doesn't know it's using WebSocket—it sees a normal connection with HTTP/2 frames.
+
+**Data Flow**:
+1. Client makes gRPC call (standard `client.Method(ctx, req)`)
+2. gRPC encodes request as HTTP/2 frames
+3. Bridge reads frames, sends as WebSocket binary messages
+4. Server receives WebSocket messages, reconstructs HTTP/2 frames
+5. gRPC server processes request normally
+6. Response follows same path in reverse
+
+---
+
+## Comparison with Alternatives
+
+| Feature | GoGRPCBridge | gRPC-Web | REST + JSON |
+|---------|--------------|----------|-------------|
+| Bidirectional Streaming | ✅ | ❌ | ❌ |
+| Server Streaming | ✅ | ✅ | ❌ |
+| Type Safety | ✅ | ✅ | ❌ |
+| Binary Efficiency | ✅ | ✅ | ❌ |
+| Works with Standard gRPC | ✅ | ❌ Needs Envoy | ❌ |
+| Browser Support | ✅ WASM | ✅ | ✅ |
+| Setup Complexity | Low | High | Low |
+| Proxy Required | ❌ | ✅ | ❌ |
+
+---
+
+## Testing & Quality
+
+- **85%+ Test Coverage** – Comprehensive unit and integration tests
+- **Race Detector Clean** – Zero data races in concurrent code
+- **Fuzz Tested** – 4 billion+ inputs across 4 fuzzers
+- **E2E Browser Tests** – Playwright-based validation
+- **Security Scanned** – Gosec on every commit
+- **Production Examples** – Real-world configurations included
+
+### Run Tests
 
 ```bash
-# Quick check (format + lint + tests)
-make check
-
-# Unit tests with coverage
-go test ./pkg/... -cover
-
-# Race detection
-go test ./pkg/... -race
+# All tests with race detection
+go test ./pkg/... -race -cover
 
 # Fuzz testing
-make fuzz
+go test -fuzz=FuzzWebSocketConnWrite ./pkg/bridge -fuzztime=30s
+go test -fuzz=FuzzWebSocketConnRead ./pkg/bridge -fuzztime=30s
+
+# E2E tests
+cd e2e && go test -v
 ```
 
 ---
 
-## 📖 How It Works
-
-```mermaid
-sequenceDiagram
-    participant Client as gRPC Client (WASM)
-    participant Bridge as GoGRPCBridge
-    participant WS as WebSocket
-    participant Server as gRPC Server
-    
-    Client->>Bridge: grpc.Dial()
-    Bridge->>WS: Upgrade HTTP → WebSocket
-    WS-->>Bridge: Connection established
-    
-    Client->>Bridge: gRPC Request
-    Bridge->>WS: HTTP/2 frames → Binary messages
-    WS->>Server: Binary messages → HTTP/2 frames
-    Server->>Server: Process gRPC call
-    Server->>WS: gRPC Response (HTTP/2)
-    WS->>Bridge: Binary messages
-    Bridge->>Client: HTTP/2 frames → gRPC Response
-```
-
-**Key Insight:** The bridge provides a transparent `net.Conn` interface backed by WebSocket. gRPC doesn't know it's using WebSocket—it thinks it's a normal TCP connection.
-
----
-
-## 🚧 Limitations & Tradeoffs
+## Limitations & Considerations
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **HTTP/2 Native** | ❌ | Uses WebSocket transport, not standard gRPC HTTP/2 |
-| **gRPC Reflection** | ❌ | Standard tools don't work on WebSocket endpoints |
-| **Firewall Traversal** | ⚠️ | Better than HTTP/2, but some proxies may block WebSocket |
-| **Browser Requirement** | ✅ | WASM client only works in browsers (use native Go otherwise) |
-| **Performance** | ✅ | Minimal overhead; binary Protobuf maintained |
-| **Tooling** | ⚠️ | Can't use `grpcurl` or `grpcui` directly on bridge endpoint |
+| **HTTP/2 Native** | ❌ | Uses WebSocket transport |
+| **gRPC Reflection** | ❌ | Tools can't introspect bridge endpoint |
+| **Performance** | ✅ | Minimal overhead, binary protocol preserved |
+| **Browser Support** | ✅ | WASM required (all modern browsers) |
+| **Firewall Friendly** | ✅ | WebSocket typically allowed |
+
+### Using gRPC Tools (grpcurl, grpcui)
+
+Standard introspection tools don't work on the WebSocket endpoint. Connect them to your gRPC server directly:
+
+```bash
+# ❌ Won't work - bridge uses WebSocket
+grpcurl -plaintext localhost:8080 list
+
+# ✅ Works - connect to backend
+grpcurl -plaintext localhost:50051 list
+grpcurl -plaintext localhost:50051 todo.TodoService/CreateTodo
+```
+
+**Testing Architecture**:
+```
+grpcurl/grpcui → [Port 50051] gRPC Server ✅
+
+Browser (WASM) → [Port 8080] Bridge → [Port 50051] gRPC Server ✅
+```
+
+---
+
+## Examples
+
+Complete, runnable examples in the `examples/` directory:
+
+| Example | Description | Use Case |
+|---------|-------------|----------|
+| **direct-bridge** | All-in-one server | Simple deployments |
+| **production-bridge** | Production config | TLS, auth, monitoring |
+| **custom-router** | HTTP + gRPC | Integrate with existing servers |
+| **wasm-client** | Full browser app | Reference implementation |
+| **grpc-server** | Standard gRPC | Backend service example |
+
+[View all examples →](./examples/)
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development workflow, testing guidelines, and security scan details.
+We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+
+- Development workflow
+- Pre-commit hooks setup
+- Testing guidelines
+- Code style standards
+- Security scanning process
+
+---
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License – use freely in commercial and open-source projects.
+
+---
+
+## Support
+
+- 📖 **Documentation**: [pkg.go.dev](https://pkg.go.dev/github.com/monstercameron/GoGRPCBridge)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/monstercameron/GoGRPCBridge/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/monstercameron/GoGRPCBridge/discussions)
+
+---
+
+**Built for developers who value type safety, performance, and great developer experience.**
+
+If this project helps you, please ⭐ star the repository and share it with your team!
