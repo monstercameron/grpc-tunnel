@@ -2,10 +2,20 @@ package bridge
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// bufferPool reduces memory allocations by reusing byte slices
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		// Default buffer size matches typical gRPC frame size
+		buf := make([]byte, 4096)
+		return &buf
+	},
+}
 
 // webSocketConn adapts a gorilla/websocket.Conn to implement net.Conn.
 // This allows gRPC to use WebSocket as its transport by providing a standard
@@ -28,6 +38,15 @@ type webSocketConn struct {
 	// writeDeadline is the deadline for write operations
 	// Note: WebSocket deadlines are not fully implemented in this adapter
 	writeDeadline time.Time
+
+	// closeOnce ensures Close() is called only once
+	closeOnce sync.Once
+
+	// closed tracks whether the connection has been closed
+	closed bool
+
+	// closedMu protects the closed flag
+	closedMu sync.RWMutex
 }
 
 // NewWebSocketConn wraps a WebSocket connection as a net.Conn.
@@ -76,6 +95,15 @@ func NewWebSocketConn(websocketConnection *websocket.Conn) net.Conn {
 //   - Only accepts binary WebSocket messages (returns net.ErrClosed for text messages)
 //   - Buffers any data that doesn't fit in destinationBuffer for subsequent reads
 func (c *webSocketConn) Read(destinationBuffer []byte) (int, error) {
+	// Check if connection is closed
+	c.closedMu.RLock()
+	isClosed := c.closed
+	c.closedMu.RUnlock()
+
+	if isClosed {
+		return 0, net.ErrClosed
+	}
+
 	// If we have buffered data from a previous read, return that first.
 	// This happens when a WebSocket message was larger than the caller's buffer.
 	if len(c.readBuf) > 0 {
@@ -124,6 +152,15 @@ func (c *webSocketConn) Read(destinationBuffer []byte) (int, error) {
 // Note: Unlike traditional TCP sockets, WebSocket writes are atomic -
 // either the entire message is sent or none of it is.
 func (c *webSocketConn) Write(sourceData []byte) (int, error) {
+	// Check if connection is closed
+	c.closedMu.RLock()
+	isClosed := c.closed
+	c.closedMu.RUnlock()
+
+	if isClosed {
+		return 0, net.ErrClosed
+	}
+
 	// Send the entire buffer as a single binary WebSocket message
 	err := c.websocket.WriteMessage(websocket.BinaryMessage, sourceData)
 	if err != nil {
@@ -143,7 +180,15 @@ func (c *webSocketConn) Write(sourceData []byte) (int, error) {
 // Returns:
 //   - err: Any error that occurred during closing
 func (c *webSocketConn) Close() error {
-	return c.websocket.Close()
+	var closeErr error
+	c.closeOnce.Do(func() {
+		c.closedMu.Lock()
+		c.closed = true
+		c.closedMu.Unlock()
+
+		closeErr = c.websocket.Close()
+	})
+	return closeErr
 }
 
 // LocalAddr returns the local network address.

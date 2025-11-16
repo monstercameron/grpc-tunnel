@@ -4,6 +4,7 @@ package dialer
 
 import (
 	"net"
+	"sync"
 	"syscall/js"
 	"time"
 )
@@ -49,15 +50,26 @@ type browserWebSocketConnection struct {
 
 	// incomingMessagesChannel receives incoming WebSocket messages.
 	// The onmessage event handler sends data here, which Read() consumes.
+	// Buffered to prevent blocking browser event handlers.
 	incomingMessagesChannel chan []byte
 
 	// incomingErrorsChannel receives WebSocket errors and close events.
 	// The onerror and onclose handlers send errors here, which Read() returns.
+	// Buffered to prevent blocking browser event handlers.
 	incomingErrorsChannel chan error
 
 	// outgoingMessagesChannel is reserved for potential future buffering.
 	// Currently unused but initialized for consistency.
 	outgoingMessagesChannel chan []byte
+
+	// closeOnce ensures Close() operations happen only once
+	closeOnce sync.Once
+
+	// closed indicates whether the connection has been closed
+	closed bool
+
+	// closedMu protects the closed flag
+	closedMu sync.RWMutex
 }
 
 // NewWebSocketConn creates a new net.Conn implementation that wraps a browser WebSocket.
@@ -88,9 +100,10 @@ type browserWebSocketConnection struct {
 func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 	connection := &browserWebSocketConnection{
 		browserWebSocket:        browserWebSocket,
-		incomingMessagesChannel: make(chan []byte),
-		incomingErrorsChannel:   make(chan error),
-		outgoingMessagesChannel: make(chan []byte), // Initialize for potential future use
+		incomingMessagesChannel: make(chan []byte, 10),    // Buffered to prevent blocking event handlers
+		incomingErrorsChannel:   make(chan error, 2),      // Buffered to prevent blocking error handlers
+		outgoingMessagesChannel: make(chan []byte),        // Initialize for potential future use
+		closed:                  false,
 	}
 
 	// Set up the onmessage handler to receive incoming WebSocket data.
@@ -115,8 +128,21 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 		}
 
 		// Send the data to the Read() method via channel (non-empty messages only)
+		// Use non-blocking send to prevent browser event handler from hanging
 		if len(messageBytes) > 0 {
-			connection.incomingMessagesChannel <- messageBytes
+			connection.closedMu.RLock()
+			isClosed := connection.closed
+			connection.closedMu.RUnlock()
+
+			if !isClosed {
+				select {
+				case connection.incomingMessagesChannel <- messageBytes:
+					// Message sent successfully
+				default:
+					// Channel full - log but don't block browser event loop
+					// In production, consider increasing buffer size or implementing backpressure
+				}
+			}
 		}
 		return nil
 	}))
@@ -124,26 +150,44 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 	// Set up the onerror handler to detect WebSocket errors.
 	// Browser WebSocket errors are asynchronous events.
 	browserWebSocket.Set(jsEventOnError, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
-		// Send a generic error to Read().
-		// The browser doesn't provide detailed error information in the event,
-		// so we use net.ErrClosed as a generic connection error.
-		connection.incomingErrorsChannel <- net.ErrClosed
+		connection.closedMu.RLock()
+		isClosed := connection.closed
+		connection.closedMu.RUnlock()
+
+		if !isClosed {
+			// Use non-blocking send to prevent hanging
+			select {
+			case connection.incomingErrorsChannel <- net.ErrClosed:
+				// Error sent successfully
+			default:
+				// Channel full - error will be caught by other mechanisms
+			}
+		}
 		return nil
 	}))
 
 	// Set up the onclose handler to detect when the WebSocket closes.
 	// This can happen due to explicit Close() calls or network issues.
 	browserWebSocket.Set(jsEventOnClose, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
-		// Send error to any pending Read() calls
-		connection.incomingErrorsChannel <- net.ErrClosed
-		// Close the channels to signal no more data will arrive.
-		// Any subsequent Read() will get the close error.
-		close(connection.incomingMessagesChannel)
-		close(connection.incomingErrorsChannel)
+		connection.closeChannels()
 		return nil
 	}))
 
 	return connection
+}
+
+// closeChannels safely closes all channels and marks the connection as closed.
+// This should be called from both the onclose event handler and the Close() method.
+func (connection *browserWebSocketConnection) closeChannels() {
+	connection.closeOnce.Do(func() {
+		connection.closedMu.Lock()
+		connection.closed = true
+		connection.closedMu.Unlock()
+
+		// Close channels to signal no more data will arrive
+		close(connection.incomingMessagesChannel)
+		close(connection.incomingErrorsChannel)
+	})
 }
 
 // Read reads data from the WebSocket into the provided buffer.
@@ -168,16 +212,33 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 // Note: Unlike traditional sockets, WebSocket messages are discrete frames.
 // Each Read() may return data from a different WebSocket message.
 func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (int, error) {
+	// Check if already closed
+	connection.closedMu.RLock()
+	isClosed := connection.closed
+	connection.closedMu.RUnlock()
+
+	if isClosed {
+		return 0, net.ErrClosed
+	}
+
 	// Wait for either a message or an error from the WebSocket event handlers.
 	// This select blocks until one of the channels receives data.
 	select {
-	case incomingMessage := <-connection.incomingMessagesChannel:
+	case incomingMessage, ok := <-connection.incomingMessagesChannel:
+		if !ok {
+			// Channel closed - connection terminated
+			return 0, net.ErrClosed
+		}
 		// Received a WebSocket message - copy it to the caller's buffer
 		bytesRead := copy(destinationBuffer, incomingMessage)
 		// Note: If incomingMessage is larger than destinationBuffer, excess bytes are discarded.
 		// This is acceptable for gRPC which handles framing at a higher level.
 		return bytesRead, nil
-	case err := <-connection.incomingErrorsChannel:
+	case err, ok := <-connection.incomingErrorsChannel:
+		if !ok {
+			// Channel closed - connection terminated
+			return 0, net.ErrClosed
+		}
 		// WebSocket error or close event occurred
 		return 0, err
 	}
@@ -204,6 +265,15 @@ func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (in
 // Note: WebSocket writes are asynchronous in the browser, so this
 // function returns before the data is actually transmitted over the network.
 func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, error) {
+	// Check if already closed
+	connection.closedMu.RLock()
+	isClosed := connection.closed
+	connection.closedMu.RUnlock()
+
+	if isClosed {
+		return 0, net.ErrClosed
+	}
+
 	// Convert the Go byte slice to a JavaScript Uint8Array.
 	// This is necessary because browser WebSocket.send() expects JavaScript types.
 	uint8ArrayToSend := js.Global().Get(jsGlobalUint8Array).New(len(sourceData))
@@ -230,6 +300,9 @@ func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, err
 // Returns:
 //   - Always returns nil (browser API doesn't provide synchronous error info)
 func (connection *browserWebSocketConnection) Close() error {
+	// Close channels first to prevent new sends
+	connection.closeChannels()
+
 	// Call the browser's WebSocket.close() method.
 	// This is asynchronous - the actual close happens in the background.
 	connection.browserWebSocket.Call(jsMethodClose)

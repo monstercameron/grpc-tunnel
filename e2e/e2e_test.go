@@ -32,18 +32,31 @@ func startCommand(t *testing.T, projectRoot, name string, command string, args .
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// Context to cancel log reading goroutines
+	ctx, cancel := context.WithCancel(context.Background())
+
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			t.Logf("[%s] %s", name, scanner.Text())
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				t.Logf("[%s] %s", name, scanner.Text())
+			}
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			t.Logf("[%s|stderr] %s", name, scanner.Text())
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				t.Logf("[%s|stderr] %s", name, scanner.Text())
+			}
 		}
 	}()
 
@@ -53,6 +66,9 @@ func startCommand(t *testing.T, projectRoot, name string, command string, args .
 
 	cleanupFunc := func() {
 		t.Logf("Cleaning up %s process...", name)
+
+		// Cancel log reading goroutines first
+		cancel()
 
 		// Kill the process and all its children
 		if err := cmd.Process.Kill(); err != nil {
