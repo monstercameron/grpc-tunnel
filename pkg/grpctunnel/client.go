@@ -28,9 +28,9 @@ type clientOptions struct {
 //	conn, _ := grpctunnel.Dial("localhost:8080",
 //	    grpctunnel.WithTLS(&tls.Config{InsecureSkipVerify: true}),
 //	)
-func WithTLS(config *tls.Config) ClientOption {
-	return func(o *clientOptions) {
-		o.tlsConfig = config
+func WithTLS(parseConfig *tls.Config) ClientOption {
+	return func(parseO *clientOptions) {
+		parseO.tlsConfig = parseConfig
 	}
 }
 
@@ -39,53 +39,53 @@ func WithTLS(config *tls.Config) ClientOption {
 //   - "ws://..." or "wss://..." -> use as-is
 //   - "localhost:8080" -> "ws://localhost:8080"
 //   - ":8080" -> "ws://localhost:8080"
-func inferWebSocketURL(target string, useTLS bool) string {
+func inferWebSocketURL(parseTarget string, isUseTLS bool) string {
 	// Already a WebSocket URL
-	if strings.HasPrefix(target, "ws://") || strings.HasPrefix(target, "wss://") {
-		return target
+	if strings.HasPrefix(parseTarget, "ws://") || strings.HasPrefix(parseTarget, "wss://") {
+		return parseTarget
 	}
 
 	// Handle bare port
-	if strings.HasPrefix(target, ":") {
-		target = "localhost" + target
+	if strings.HasPrefix(parseTarget, ":") {
+		parseTarget = "localhost" + parseTarget
 	}
 
 	// Build WebSocket URL
-	scheme := "ws"
-	if useTLS {
-		scheme = "wss"
+	parseScheme := "ws"
+	if isUseTLS {
+		parseScheme = "wss"
 	}
-	return scheme + "://" + target
+	return parseScheme + "://" + parseTarget
 }
 
 // newWebSocketDialer creates a custom gRPC dialer that establishes WebSocket connections.
-func newWebSocketDialer(target string, opts ...ClientOption) func(context.Context, string) (net.Conn, error) {
-	options := &clientOptions{}
-	for _, opt := range opts {
-		opt(options)
+func newWebSocketDialer(parseTarget string, parseOpts ...ClientOption) func(context.Context, string) (net.Conn, error) {
+	parseOptions := &clientOptions{}
+	for _, parseOpt := range parseOpts {
+		parseOpt(parseOptions)
 	}
 
-	wsURL := inferWebSocketURL(target, options.tlsConfig != nil)
+	parseWsURL := inferWebSocketURL(parseTarget, parseOptions.tlsConfig != nil)
 
-	return func(ctx context.Context, addr string) (net.Conn, error) {
+	return func(parseCtx context.Context, parseAddr string) (net.Conn, error) {
 		// Parse WebSocket URL
-		u, err := url.Parse(wsURL)
-		if err != nil {
-			return nil, err
+		parseU, parseErr := url.Parse(parseWsURL)
+		if parseErr != nil {
+			return nil, parseErr
 		}
 
 		// Create WebSocket dialer
-		dialer := websocket.Dialer{
-			TLSClientConfig: options.tlsConfig,
+		parseDialer := websocket.Dialer{
+			TLSClientConfig: parseOptions.tlsConfig,
 		}
 
 		// Dial WebSocket
-		ws, _, err := dialer.DialContext(ctx, u.String(), nil)
-		if err != nil {
-			return nil, err
+		parseWs, _, parseErr := parseDialer.DialContext(parseCtx, parseU.String(), nil)
+		if parseErr != nil {
+			return nil, parseErr
 		}
 
-		return newWebSocketConn(ws), nil
+		return newWebSocketConn(parseWs), nil
 	}
 }
 
@@ -108,8 +108,8 @@ func newWebSocketDialer(target string, opts ...ClientOption) func(context.Contex
 //	defer conn.Close()
 //
 //	client := proto.NewYourServiceClient(conn)
-func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	return DialContext(context.Background(), target, opts...)
+func Dial(parseTarget string, parseOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	return DialContext(context.Background(), parseTarget, parseOpts...)
 }
 
 // DialContext creates a gRPC client connection over WebSocket with context.
@@ -123,23 +123,23 @@ func Dial(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 //	conn, err := grpctunnel.DialContext(ctx, "localhost:8080",
 //	    grpc.WithTransportCredentials(insecure.NewCredentials()),
 //	)
-func DialContext(ctx context.Context, target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+func DialContext(parseCtx context.Context, parseTarget string, parseOpts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	// Extract grpctunnel options and grpc options
-	var tunnelOpts []ClientOption
-	var grpcOpts []grpc.DialOption
+	var parseTunnelOpts []ClientOption
+	var parseGrpcOpts []grpc.DialOption
 
-	for _, opt := range opts {
+	for _, parseOpt := range parseOpts {
 		// Check if it's a ClientOption (our custom type)
-		if co, ok := opt.(interface{ apply(*clientOptions) }); ok {
+		if parseCo, parseOk := parseOpt.(interface{ apply(*clientOptions) }); parseOk {
 			// This is a bit of a hack - we'll handle this differently
-			_ = co
+			_ = parseCo
 		} else {
-			grpcOpts = append(grpcOpts, opt)
+			parseGrpcOpts = append(parseGrpcOpts, parseOpt)
 		}
 	}
 
 	// Add our custom dialer
-	grpcOpts = append(grpcOpts, grpc.WithContextDialer(newWebSocketDialer(target, tunnelOpts...)))
+	parseGrpcOpts = append(parseGrpcOpts, grpc.WithContextDialer(newWebSocketDialer(parseTarget, parseTunnelOpts...)))
 
-	return grpc.DialContext(ctx, target, grpcOpts...)
+	return grpc.DialContext(parseCtx, parseTarget, parseGrpcOpts...)
 }

@@ -29,118 +29,118 @@ type todoServer struct {
 
 func loadTodos() ([]*proto.Todo, error) {
 	const filePath = "../_shared/data/todos.json"
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	if _, parseErr := os.Stat(filePath); os.IsNotExist(parseErr) {
 		// Create data directory if it doesn't exist
-		if err := os.MkdirAll("../_shared/data", 0750); err != nil {
-			return nil, fmt.Errorf("failed to create data directory: %w", err)
+		if parseErr2 := os.MkdirAll("../_shared/data", 0750); parseErr2 != nil {
+			return nil, fmt.Errorf("failed to create data directory: %w", parseErr2)
 		}
-		if err := ioutil.WriteFile(filePath, []byte("[]"), 0600); err != nil {
-			return nil, fmt.Errorf("failed to create todos.json: %w", err)
+		if parseErr3 := ioutil.WriteFile(filePath, []byte("[]"), 0600); parseErr3 != nil {
+			return nil, fmt.Errorf("failed to create todos.json: %w", parseErr3)
 		}
 	}
-	data, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read todos.json: %w", err)
+	parseData, parseErr4 := ioutil.ReadFile(filePath)
+	if parseErr4 != nil {
+		return nil, fmt.Errorf("failed to read todos.json: %w", parseErr4)
 	}
-	if len(data) == 0 {
+	if len(parseData) == 0 {
 		return []*proto.Todo{}, nil
 	}
-	var ts []*proto.Todo
-	if err := json.Unmarshal(data, &ts); err != nil {
+	var parseTs []*proto.Todo
+	if parseErr5 := json.Unmarshal(parseData, &parseTs); parseErr5 != nil {
 		_ = ioutil.WriteFile(filePath, []byte("[]"), 0600)
 		return []*proto.Todo{}, nil
 	}
-	return ts, nil
+	return parseTs, nil
 }
 
-func saveTodos(todosSlice []*proto.Todo) error {
+func saveTodos(parseTodosSlice []*proto.Todo) error {
 	const filePath = "../_shared/data/todos.json"
-	out, err := json.MarshalIndent(todosSlice, "", "  ")
-	if err != nil {
-		return err
+	parseOut, parseErr := json.MarshalIndent(parseTodosSlice, "", "  ")
+	if parseErr != nil {
+		return parseErr
 	}
-	return ioutil.WriteFile(filePath, out, 0600)
+	return ioutil.WriteFile(filePath, parseOut, 0600)
 }
 
 func newTodoServer() (*todoServer, error) {
-	t, err := loadTodos()
-	if err != nil {
-		return nil, err
+	parseT, parseErr := loadTodos()
+	if parseErr != nil {
+		return nil, parseErr
 	}
-	return &todoServer{store: t}, nil
+	return &todoServer{store: parseT}, nil
 }
 
-func (s *todoServer) CreateTodo(ctx context.Context, req *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	newID := uuid.New().String()
-	newTodo := &proto.Todo{Id: newID, Text: req.Text, Done: false}
-	s.store = append(s.store, newTodo)
-	_ = saveTodos(s.store)
-	log.Printf("Created new todo: %s => %s\n", newID, req.Text)
-	return &proto.CreateTodoResponse{Todo: newTodo}, nil
+func (parseS *todoServer) CreateTodo(parseCtx context.Context, parseReq *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
+	parseS.mu.Lock()
+	defer parseS.mu.Unlock()
+	parseNewID := uuid.New().String()
+	parseNewTodo := &proto.Todo{Id: parseNewID, Text: parseReq.Text, Done: false}
+	parseS.store = append(parseS.store, parseNewTodo)
+	_ = saveTodos(parseS.store)
+	log.Printf("Created new todo: %s => %s\n", parseNewID, parseReq.Text)
+	return &proto.CreateTodoResponse{Todo: parseNewTodo}, nil
 }
 
-func (s *todoServer) ListTodos(ctx context.Context, req *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return &proto.ListTodosResponse{Todos: s.store}, nil
+func (parseS *todoServer) ListTodos(parseCtx context.Context, parseReq *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
+	parseS.mu.Lock()
+	defer parseS.mu.Unlock()
+	return &proto.ListTodosResponse{Todos: parseS.store}, nil
 }
 
-func (s *todoServer) UpdateTodo(ctx context.Context, req *proto.UpdateTodoRequest) (*proto.UpdateTodoResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var updated *proto.Todo
-	for _, t := range s.store {
-		if t.Id == req.Id {
-			t.Text = req.Text
-			t.Done = req.Done
-			updated = t
+func (parseS *todoServer) UpdateTodo(parseCtx context.Context, parseReq *proto.UpdateTodoRequest) (*proto.UpdateTodoResponse, error) {
+	parseS.mu.Lock()
+	defer parseS.mu.Unlock()
+	var parseUpdated *proto.Todo
+	for _, parseT := range parseS.store {
+		if parseT.Id == parseReq.Id {
+			parseT.Text = parseReq.Text
+			parseT.Done = parseReq.Done
+			parseUpdated = parseT
 			break
 		}
 	}
-	if updated == nil {
+	if parseUpdated == nil {
 		return &proto.UpdateTodoResponse{}, nil
 	}
-	_ = saveTodos(s.store)
-	return &proto.UpdateTodoResponse{Todo: updated}, nil
+	_ = saveTodos(parseS.store)
+	return &proto.UpdateTodoResponse{Todo: parseUpdated}, nil
 }
 
-func (s *todoServer) DeleteTodo(ctx context.Context, req *proto.DeleteTodoRequest) (*proto.DeleteTodoResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	index := -1
-	for i, t := range s.store {
-		if t.Id == req.Id {
-			index = i
+func (parseS *todoServer) DeleteTodo(parseCtx context.Context, parseReq *proto.DeleteTodoRequest) (*proto.DeleteTodoResponse, error) {
+	parseS.mu.Lock()
+	defer parseS.mu.Unlock()
+	parseIndex := -1
+	for parseI, parseT := range parseS.store {
+		if parseT.Id == parseReq.Id {
+			parseIndex = parseI
 			break
 		}
 	}
-	if index == -1 {
+	if parseIndex == -1 {
 		return &proto.DeleteTodoResponse{Success: false}, nil
 	}
-	s.store = append(s.store[:index], s.store[index+1:]...)
-	_ = saveTodos(s.store)
+	parseS.store = append(parseS.store[:parseIndex], parseS.store[parseIndex+1:]...)
+	_ = saveTodos(parseS.store)
 	return &proto.DeleteTodoResponse{Success: true}, nil
 }
 
 func main() {
 	// Create gRPC server with TodoService
-	srv, err := newTodoServer()
-	if err != nil {
-		log.Fatalf("Failed to create todoServer: %v\n", err)
+	parseSrv, parseErr := newTodoServer()
+	if parseErr != nil {
+		log.Fatalf("Failed to create todoServer: %v\n", parseErr)
 	}
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, srv)
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, parseSrv)
 
 	// One-liner: Serve gRPC over WebSocket
 	log.Println("Direct gRPC-over-WebSocket server listening on :5000")
-	log.Fatal(grpctunnel.ListenAndServe(":5000", grpcServer,
-		grpctunnel.WithConnectHook(func(r *http.Request) {
-			log.Printf("Client connected: %s", r.RemoteAddr)
+	log.Fatal(grpctunnel.ListenAndServe(":5000", parseGrpcServer,
+		grpctunnel.WithConnectHook(func(parseR *http.Request) {
+			log.Printf("Client connected: %s", parseR.RemoteAddr)
 		}),
-		grpctunnel.WithDisconnectHook(func(r *http.Request) {
-			log.Printf("Client disconnected: %s", r.RemoteAddr)
+		grpctunnel.WithDisconnectHook(func(parseR2 *http.Request) {
+			log.Printf("Client disconnected: %s", parseR2.RemoteAddr)
 		}),
 	))
 }

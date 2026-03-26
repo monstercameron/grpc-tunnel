@@ -97,9 +97,9 @@ type browserWebSocketConnection struct {
 //	browserWebSocket.Set("binaryType", "arraybuffer")
 //	conn := dialer.NewWebSocketConn(browserWebSocket)
 //	// Use conn with gRPC or any code expecting net.Conn
-func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
-	connection := &browserWebSocketConnection{
-		browserWebSocket:        browserWebSocket,
+func NewWebSocketConn(parseBrowserWebSocket js.Value) net.Conn {
+	parseConnection := &browserWebSocketConnection{
+		parseBrowserWebSocket:   parseBrowserWebSocket,
 		incomingMessagesChannel: make(chan []byte, 10), // Buffered to prevent blocking event handlers
 		incomingErrorsChannel:   make(chan error, 2),   // Buffered to prevent blocking error handlers
 		outgoingMessagesChannel: make(chan []byte),     // Initialize for potential future use
@@ -109,34 +109,34 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 	// Set up the onmessage handler to receive incoming WebSocket data.
 	// Browser WebSocket messages arrive as JavaScript events, which we must
 	// convert to Go byte slices and send through a channel.
-	browserWebSocket.Set(jsEventOnMessage, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
-		messageEvent := eventArgs[0]
-		messageData := messageEvent.Get(jsPropertyData)
+	parseBrowserWebSocket.Set(jsEventOnMessage, js.FuncOf(func(parseThis js.Value, parseEventArgs []js.Value) interface{} {
+		parseMessageEvent := parseEventArgs[0]
+		parseMessageData := parseMessageEvent.Get(jsPropertyData)
 
 		// WebSocket data can arrive as ArrayBuffer or Blob.
 		// We configured binaryType="arraybuffer" so we expect ArrayBuffer.
-		var messageBytes []byte
-		if messageData.Type() == js.TypeObject {
+		var parseMessageBytes []byte
+		if parseMessageData.Type() == js.TypeObject {
 			// Convert the JavaScript ArrayBuffer to a Uint8Array for easy copying
-			uint8Array := js.Global().Get(jsGlobalUint8Array).New(messageData)
-			arrayLength := uint8Array.Get(jsPropertyLength).Int()
-			if arrayLength > 0 {
+			parseUint8Array := js.Global().Get(jsGlobalUint8Array).New(parseMessageData)
+			parseArrayLength := parseUint8Array.Get(jsPropertyLength).Int()
+			if parseArrayLength > 0 {
 				// Allocate a Go byte slice and copy the data from JavaScript
-				messageBytes = make([]byte, arrayLength)
-				js.CopyBytesToGo(messageBytes, uint8Array)
+				parseMessageBytes = make([]byte, parseArrayLength)
+				js.CopyBytesToGo(parseMessageBytes, parseUint8Array)
 			}
 		}
 
 		// Send the data to the Read() method via channel (non-empty messages only)
 		// Use non-blocking send to prevent browser event handler from hanging
-		if len(messageBytes) > 0 {
-			connection.closedMu.RLock()
-			isClosed := connection.closed
-			connection.closedMu.RUnlock()
+		if len(parseMessageBytes) > 0 {
+			parseConnection.closedMu.RLock()
+			isClosed := parseConnection.closed
+			parseConnection.closedMu.RUnlock()
 
 			if !isClosed {
 				select {
-				case connection.incomingMessagesChannel <- messageBytes:
+				case parseConnection.incomingMessagesChannel <- parseMessageBytes:
 					// Message sent successfully
 				default:
 					// Channel full - log but don't block browser event loop
@@ -149,15 +149,15 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 
 	// Set up the onerror handler to detect WebSocket errors.
 	// Browser WebSocket errors are asynchronous events.
-	browserWebSocket.Set(jsEventOnError, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
-		connection.closedMu.RLock()
-		isClosed := connection.closed
-		connection.closedMu.RUnlock()
+	parseBrowserWebSocket.Set(jsEventOnError, js.FuncOf(func(parseThis2 js.Value, parseEventArgs2 []js.Value) interface{} {
+		parseConnection.closedMu.RLock()
+		isClosed := parseConnection.closed
+		parseConnection.closedMu.RUnlock()
 
 		if !isClosed {
 			// Use non-blocking send to prevent hanging
 			select {
-			case connection.incomingErrorsChannel <- net.ErrClosed:
+			case parseConnection.incomingErrorsChannel <- net.ErrClosed:
 				// Error sent successfully
 			default:
 				// Channel full - error will be caught by other mechanisms
@@ -168,25 +168,25 @@ func NewWebSocketConn(browserWebSocket js.Value) net.Conn {
 
 	// Set up the onclose handler to detect when the WebSocket closes.
 	// This can happen due to explicit Close() calls or network issues.
-	browserWebSocket.Set(jsEventOnClose, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
-		connection.closeChannels()
+	parseBrowserWebSocket.Set(jsEventOnClose, js.FuncOf(func(parseThis3 js.Value, parseEventArgs3 []js.Value) interface{} {
+		parseConnection.closeChannels()
 		return nil
 	}))
 
-	return connection
+	return parseConnection
 }
 
 // closeChannels safely closes all channels and marks the connection as closed.
 // This should be called from both the onclose event handler and the Close() method.
-func (connection *browserWebSocketConnection) closeChannels() {
-	connection.closeOnce.Do(func() {
-		connection.closedMu.Lock()
-		connection.closed = true
-		connection.closedMu.Unlock()
+func (parseConnection *browserWebSocketConnection) closeChannels() {
+	parseConnection.closeOnce.Do(func() {
+		parseConnection.closedMu.Lock()
+		parseConnection.closed = true
+		parseConnection.closedMu.Unlock()
 
 		// Close channels to signal no more data will arrive
-		close(connection.incomingMessagesChannel)
-		close(connection.incomingErrorsChannel)
+		close(parseConnection.incomingMessagesChannel)
+		close(parseConnection.incomingErrorsChannel)
 	})
 }
 
@@ -211,11 +211,11 @@ func (connection *browserWebSocketConnection) closeChannels() {
 //
 // Note: Unlike traditional sockets, WebSocket messages are discrete frames.
 // Each Read() may return data from a different WebSocket message.
-func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (int, error) {
+func (parseConnection *browserWebSocketConnection) Read(parseDestinationBuffer []byte) (int, error) {
 	// Check if already closed
-	connection.closedMu.RLock()
-	isClosed := connection.closed
-	connection.closedMu.RUnlock()
+	parseConnection.closedMu.RLock()
+	isClosed := parseConnection.closed
+	parseConnection.closedMu.RUnlock()
 
 	if isClosed {
 		return 0, net.ErrClosed
@@ -224,23 +224,23 @@ func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (in
 	// Wait for either a message or an error from the WebSocket event handlers.
 	// This select blocks until one of the channels receives data.
 	select {
-	case incomingMessage, ok := <-connection.incomingMessagesChannel:
-		if !ok {
+	case parseIncomingMessage, parseOk := <-parseConnection.incomingMessagesChannel:
+		if !parseOk {
 			// Channel closed - connection terminated
 			return 0, net.ErrClosed
 		}
 		// Received a WebSocket message - copy it to the caller's buffer
-		bytesRead := copy(destinationBuffer, incomingMessage)
+		parseBytesRead := copy(parseDestinationBuffer, parseIncomingMessage)
 		// Note: If incomingMessage is larger than destinationBuffer, excess bytes are discarded.
 		// This is acceptable for gRPC which handles framing at a higher level.
-		return bytesRead, nil
-	case err, ok := <-connection.incomingErrorsChannel:
-		if !ok {
+		return parseBytesRead, nil
+	case parseErr, parseOk2 := <-parseConnection.incomingErrorsChannel:
+		if !parseOk2 {
 			// Channel closed - connection terminated
 			return 0, net.ErrClosed
 		}
 		// WebSocket error or close event occurred
-		return 0, err
+		return 0, parseErr
 	}
 }
 
@@ -264,11 +264,11 @@ func (connection *browserWebSocketConnection) Read(destinationBuffer []byte) (in
 //
 // Note: WebSocket writes are asynchronous in the browser, so this
 // function returns before the data is actually transmitted over the network.
-func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, error) {
+func (parseConnection *browserWebSocketConnection) Write(parseSourceData []byte) (int, error) {
 	// Check if already closed
-	connection.closedMu.RLock()
-	isClosed := connection.closed
-	connection.closedMu.RUnlock()
+	parseConnection.closedMu.RLock()
+	isClosed := parseConnection.closed
+	parseConnection.closedMu.RUnlock()
 
 	if isClosed {
 		return 0, net.ErrClosed
@@ -276,18 +276,18 @@ func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, err
 
 	// Convert the Go byte slice to a JavaScript Uint8Array.
 	// This is necessary because browser WebSocket.send() expects JavaScript types.
-	uint8ArrayToSend := js.Global().Get(jsGlobalUint8Array).New(len(sourceData))
-	js.CopyBytesToJS(uint8ArrayToSend, sourceData)
+	parseUint8ArrayToSend := js.Global().Get(jsGlobalUint8Array).New(len(parseSourceData))
+	js.CopyBytesToJS(parseUint8ArrayToSend, parseSourceData)
 
 	// Send the data over the WebSocket using the browser API.
 	// This is an asynchronous operation - the browser handles the actual
 	// network transmission in the background.
-	connection.browserWebSocket.Call(jsMethodSend, uint8ArrayToSend)
+	parseConnection.browserWebSocket.Call(jsMethodSend, parseUint8ArrayToSend)
 
 	// Return the number of bytes "written".
 	// Note: This doesn't mean the data has been transmitted, just that
 	// it has been handed to the browser's WebSocket implementation.
-	return len(sourceData), nil
+	return len(parseSourceData), nil
 }
 
 // Close closes the WebSocket connection.
@@ -299,13 +299,13 @@ func (connection *browserWebSocketConnection) Write(sourceData []byte) (int, err
 //
 // Returns:
 //   - Always returns nil (browser API doesn't provide synchronous error info)
-func (connection *browserWebSocketConnection) Close() error {
+func (parseConnection *browserWebSocketConnection) Close() error {
 	// Close channels first to prevent new sends
-	connection.closeChannels()
+	parseConnection.closeChannels()
 
 	// Call the browser's WebSocket.close() method.
 	// This is asynchronous - the actual close happens in the background.
-	connection.browserWebSocket.Call(jsMethodClose)
+	parseConnection.browserWebSocket.Call(jsMethodClose)
 	return nil
 }
 
@@ -318,7 +318,7 @@ func (connection *browserWebSocketConnection) Close() error {
 // Note: Browser WebSockets don't expose local address information,
 // so this returns a placeholder. This is acceptable as gRPC doesn't
 // rely on local address information for WebSocket connections.
-func (connection *browserWebSocketConnection) LocalAddr() net.Addr {
+func (parseConnection *browserWebSocketConnection) LocalAddr() net.Addr {
 	return &browserWebSocketAddr{networkTypeWebSocket, addressLocal}
 }
 
@@ -331,7 +331,7 @@ func (connection *browserWebSocketConnection) LocalAddr() net.Addr {
 // Note: Browser WebSockets don't expose remote address information,
 // so this returns a placeholder. This is acceptable as gRPC doesn't
 // rely on remote address information for WebSocket connections.
-func (connection *browserWebSocketConnection) RemoteAddr() net.Addr {
+func (parseConnection *browserWebSocketConnection) RemoteAddr() net.Addr {
 	return &browserWebSocketAddr{networkTypeWebSocket, addressRemote}
 }
 
@@ -347,7 +347,7 @@ func (connection *browserWebSocketConnection) RemoteAddr() net.Addr {
 // Note: Browser WebSockets don't support deadlines natively.
 // This method is a no-op placeholder to satisfy the net.Conn interface.
 // Timeout behavior should be handled at a higher level (e.g., context.Context).
-func (connection *browserWebSocketConnection) SetDeadline(deadline time.Time) error {
+func (parseConnection *browserWebSocketConnection) SetDeadline(parseDeadline time.Time) error {
 	// Browser WebSockets don't support deadlines in the same way as TCP sockets.
 	// Deadline enforcement would require additional complexity with timers and
 	// goroutines, which is not currently implemented.
@@ -366,7 +366,7 @@ func (connection *browserWebSocketConnection) SetDeadline(deadline time.Time) er
 //
 // Note: Browser WebSockets don't support read deadlines natively.
 // This method is a no-op placeholder to satisfy the net.Conn interface.
-func (connection *browserWebSocketConnection) SetReadDeadline(deadline time.Time) error {
+func (parseConnection *browserWebSocketConnection) SetReadDeadline(parseDeadline time.Time) error {
 	return nil
 }
 
@@ -381,7 +381,7 @@ func (connection *browserWebSocketConnection) SetReadDeadline(deadline time.Time
 //
 // Note: Browser WebSockets don't support write deadlines natively.
 // This method is a no-op placeholder to satisfy the net.Conn interface.
-func (connection *browserWebSocketConnection) SetWriteDeadline(deadline time.Time) error {
+func (parseConnection *browserWebSocketConnection) SetWriteDeadline(parseDeadline time.Time) error {
 	return nil
 }
 
@@ -400,11 +400,11 @@ type browserWebSocketAddr struct {
 //
 // Returns:
 //   - Always returns "websocket"
-func (addr *browserWebSocketAddr) Network() string { return addr.networkType }
+func (parseAddr *browserWebSocketAddr) Network() string { return parseAddr.networkType }
 
 // String returns the address as a string.
 // It implements the net.Addr String method.
 //
 // Returns:
 //   - Either "local" or "remote" depending on the address type
-func (addr *browserWebSocketAddr) String() string { return addr.addressString }
+func (parseAddr *browserWebSocketAddr) String() string { return parseAddr.addressString }

@@ -9,19 +9,19 @@ import (
 // Note: These tests validate URL inference logic
 // Actual browser WebSocket connections require a browser environment
 
-func TestInferBrowserWebSocketURL_EmptyTarget(t *testing.T) {
+func TestInferBrowserWebSocketURL_EmptyTarget(parseT *testing.T) {
 	// In a real browser, this would use window.location
 	// In test environment, we test the fallback
-	result := inferBrowserWebSocketURL("")
+	parseResult := inferBrowserWebSocketURL("")
 
 	// Should have a valid URL (either from location or fallback)
-	if result == "" {
-		t.Error("Expected non-empty URL")
+	if parseResult == "" {
+		parseT.Error("Expected non-empty URL")
 	}
 }
 
-func TestInferBrowserWebSocketURL_FullURL(t *testing.T) {
-	tests := []struct {
+func TestInferBrowserWebSocketURL_FullURL(parseT *testing.T) {
+	parseTests := []struct {
 		name   string
 		target string
 		expect string
@@ -30,21 +30,21 @@ func TestInferBrowserWebSocketURL_FullURL(t *testing.T) {
 		{"Secure WebSocket", "wss://api.example.com", "wss://api.example.com"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := inferBrowserWebSocketURL(tt.target)
-			if result != tt.expect {
-				t.Errorf("Expected %s, got %s", tt.expect, result)
+	for _, parseTt := range parseTests {
+		parseT.Run(parseTt.name, func(parseT2 *testing.T) {
+			parseResult := inferBrowserWebSocketURL(parseTt.target)
+			if parseResult != parseTt.expect {
+				parseT2.Errorf("Expected %s, got %s", parseTt.expect, parseResult)
 			}
 		})
 	}
 }
 
-func TestInferBrowserWebSocketURL_HostPort(t *testing.T) {
-	result := inferBrowserWebSocketURL("localhost:8080")
+func TestInferBrowserWebSocketURL_HostPort(parseT *testing.T) {
+	parseResult := inferBrowserWebSocketURL("localhost:8080")
 
 	// Should add ws:// or wss:// prefix
-	if result != "ws://localhost:8080" && result != "wss://localhost:8080" {
-		t.Logf("Got: %s (acceptable with browser protocol inference)", result)
+	if parseResult != "ws://localhost:8080" && parseResult != "wss://localhost:8080" {
+		parseT.Logf("Got: %s (acceptable with browser protocol inference)", parseResult)
 	}
 }

@@ -41,12 +41,12 @@ const (
 //
 // Returns:
 //   - A dialer function compatible with grpc.WithContextDialer
-func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string) (net.Conn, error) {
-	return func(dialContext context.Context, grpcTargetAddress string) (net.Conn, error) {
+func newBrowserWebSocketDialer(parseWebSocketURL string) func(context.Context, string) (net.Conn, error) {
+	return func(parseDialContext context.Context, parseGrpcTargetAddress string) (net.Conn, error) {
 		// Access the browser's WebSocket constructor from the JavaScript global scope.
 		// This is the standard browser WebSocket API.
-		browserWebSocketConstructor := js.Global().Get(jsGlobalWebSocket)
-		if !browserWebSocketConstructor.Truthy() {
+		parseBrowserWebSocketConstructor := js.Global().Get(jsGlobalWebSocket)
+		if !parseBrowserWebSocketConstructor.Truthy() {
 			// WebSocket API not available - this shouldn't happen in modern browsers
 			// but could occur in non-browser WASM environments
 			return nil, status.Errorf(codes.Unavailable, "WASM: WebSocket not available in this environment")
@@ -54,37 +54,37 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 
 		// Create a new browser WebSocket instance with the provided URL.
 		// This initiates the WebSocket handshake in the background.
-		browserWebSocket := browserWebSocketConstructor.New(webSocketURL)
+		parseBrowserWebSocket := parseBrowserWebSocketConstructor.New(parseWebSocketURL)
 
 		// Configure the WebSocket to use ArrayBuffer for binary data.
 		// gRPC requires binary communication, so we must set binaryType to 'arraybuffer'.
 		// The alternative 'blob' type would be incompatible with our data handling.
-		browserWebSocket.Set(jsPropertyBinaryType, jsBinaryTypeArrayBuffer)
+		parseBrowserWebSocket.Set(jsPropertyBinaryType, jsBinaryTypeArrayBuffer)
 
 		// Create our net.Conn adapter that wraps this browser WebSocket.
 		// This adapter translates between the event-driven WebSocket API
 		// and the synchronous Read/Write interface that gRPC expects.
-		webSocketNetworkConnection := NewWebSocketConn(browserWebSocket)
+		parseWebSocketNetworkConnection := NewWebSocketConn(parseBrowserWebSocket)
 
 		// Set up error handling for the WebSocket connection.
 		// Browser WebSocket errors are asynchronous events, so we use a channel
 		// to communicate them back to this synchronous function.
-		connectionErrorChannel := make(chan error, 1)
-		browserWebSocket.Set("onerror", js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+		parseConnectionErrorChannel := make(chan error, 1)
+		parseBrowserWebSocket.Set("onerror", js.FuncOf(func(parseThis js.Value, parseEventArgs []js.Value) interface{} {
 			// Log the error event for debugging purposes
-			log.Printf("WASM: WebSocket error: %v", eventArgs[0])
+			log.Printf("WASM: WebSocket error: %v", parseEventArgs[0])
 			// Send the error to our channel so we can return it
-			connectionErrorChannel <- status.Errorf(codes.Unavailable, "WASM: WebSocket error during connection setup")
+			parseConnectionErrorChannel <- status.Errorf(codes.Unavailable, "WASM: WebSocket error during connection setup")
 			return nil
 		}))
 
 		// Set up a listener for the 'onopen' event to know when the connection is ready.
 		// Browser WebSocket connections are asynchronous, so we must wait for this event
 		// before we can start using the connection.
-		connectionOpenChannel := make(chan struct{}, 1)
-		browserWebSocket.Set(jsEventOnOpen, js.FuncOf(func(this js.Value, eventArgs []js.Value) interface{} {
+		parseConnectionOpenChannel := make(chan struct{}, 1)
+		parseBrowserWebSocket.Set(jsEventOnOpen, js.FuncOf(func(parseThis2 js.Value, parseEventArgs2 []js.Value) interface{} {
 			// Signal that the connection is now open and ready to use
-			connectionOpenChannel <- struct{}{}
+			parseConnectionOpenChannel <- struct{}{}
 			return nil
 		}))
 
@@ -93,25 +93,25 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 		// 2. Connection fails with an error
 		// 3. Context is cancelled (timeout or explicit cancellation)
 		select {
-		case <-connectionOpenChannel:
+		case <-parseConnectionOpenChannel:
 			// Success! The WebSocket is now connected and ready.
 			log.Println("WASM: WebSocket connection opened.")
-		case err := <-connectionErrorChannel:
+		case parseErr := <-parseConnectionErrorChannel:
 			// Connection failed during the handshake
-			return nil, err
-		case <-dialContext.Done():
+			return nil, parseErr
+		case <-parseDialContext.Done():
 			// The dialing context was cancelled or timed out before connection completed.
 			// Clean up by closing the WebSocket if it's still in the CONNECTING state.
-			if browserWebSocket.Get(jsPropertyReadyState).Int() == webSocketStateConnecting {
-				browserWebSocket.Call(jsMethodClose)
+			if parseBrowserWebSocket.Get(jsPropertyReadyState).Int() == webSocketStateConnecting {
+				parseBrowserWebSocket.Call(jsMethodClose)
 			}
 			// Return the context error (DeadlineExceeded or Canceled)
-			return nil, dialContext.Err()
+			return nil, parseDialContext.Err()
 		}
 
 		// The WebSocket is now open and ready to use.
 		// Return the net.Conn adapter so gRPC can send HTTP/2 frames over it.
-		return webSocketNetworkConnection, nil
+		return parseWebSocketNetworkConnection, nil
 	}
 }
 
@@ -151,6 +151,6 @@ func newBrowserWebSocketDialer(webSocketURL string) func(context.Context, string
 //
 // Note: This function is only available in WASM builds (//go:build js && wasm).
 // For non-WASM Go code, use bridge.DialOption instead.
-func New(webSocketURL string) grpc.DialOption {
-	return grpc.WithContextDialer(newBrowserWebSocketDialer(webSocketURL))
+func New(parseWebSocketURL string) grpc.DialOption {
+	return grpc.WithContextDialer(newBrowserWebSocketDialer(parseWebSocketURL))
 }

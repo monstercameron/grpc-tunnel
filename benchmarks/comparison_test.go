@@ -25,102 +25,102 @@ type todoService struct {
 	todos []*proto.Todo
 }
 
-func (s *todoService) CreateTodo(ctx context.Context, req *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
-	todo := &proto.Todo{
-		Id:   fmt.Sprintf("todo-%d", len(s.todos)+1),
-		Text: req.Text,
+func (parseS *todoService) CreateTodo(parseCtx context.Context, parseReq *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
+	parseTodo := &proto.Todo{
+		Id:   fmt.Sprintf("todo-%d", len(parseS.todos)+1),
+		Text: parseReq.Text,
 		Done: false,
 	}
-	s.todos = append(s.todos, todo)
-	return &proto.CreateTodoResponse{Todo: todo}, nil
+	parseS.todos = append(parseS.todos, parseTodo)
+	return &proto.CreateTodoResponse{Todo: parseTodo}, nil
 }
 
-func (s *todoService) ListTodos(ctx context.Context, req *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
-	return &proto.ListTodosResponse{Todos: s.todos}, nil
+func (parseS *todoService) ListTodos(parseCtx context.Context, parseReq *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
+	return &proto.ListTodosResponse{Todos: parseS.todos}, nil
 }
 
-func (s *todoService) UpdateTodo(ctx context.Context, req *proto.UpdateTodoRequest) (*proto.UpdateTodoResponse, error) {
-	for _, t := range s.todos {
-		if t.Id == req.Id {
-			t.Text = req.Text
-			t.Done = req.Done
-			return &proto.UpdateTodoResponse{Todo: t}, nil
+func (parseS *todoService) UpdateTodo(parseCtx context.Context, parseReq *proto.UpdateTodoRequest) (*proto.UpdateTodoResponse, error) {
+	for _, parseT := range parseS.todos {
+		if parseT.Id == parseReq.Id {
+			parseT.Text = parseReq.Text
+			parseT.Done = parseReq.Done
+			return &proto.UpdateTodoResponse{Todo: parseT}, nil
 		}
 	}
 	return nil, fmt.Errorf("todo not found")
 }
 
-func (s *todoService) DeleteTodo(ctx context.Context, req *proto.DeleteTodoRequest) (*proto.DeleteTodoResponse, error) {
-	for i, t := range s.todos {
-		if t.Id == req.Id {
-			s.todos = append(s.todos[:i], s.todos[i+1:]...)
+func (parseS *todoService) DeleteTodo(parseCtx context.Context, parseReq *proto.DeleteTodoRequest) (*proto.DeleteTodoResponse, error) {
+	for parseI, parseT := range parseS.todos {
+		if parseT.Id == parseReq.Id {
+			parseS.todos = append(parseS.todos[:parseI], parseS.todos[parseI+1:]...)
 			return &proto.DeleteTodoResponse{Success: true}, nil
 		}
 	}
 	return &proto.DeleteTodoResponse{Success: false}, nil
 }
 
-func (s *todoService) StreamTodos(req *proto.StreamTodosRequest, stream proto.TodoService_StreamTodosServer) error {
-	for _, todo := range s.todos {
-		if err := stream.Send(&proto.StreamTodosResponse{Todo: todo}); err != nil {
-			return err
+func (parseS *todoService) StreamTodos(parseReq *proto.StreamTodosRequest, parseStream proto.TodoService_StreamTodosServer) error {
+	for _, parseTodo := range parseS.todos {
+		if parseErr := parseStream.Send(&proto.StreamTodosResponse{Todo: parseTodo}); parseErr != nil {
+			return parseErr
 		}
 	}
 	return nil
 }
 
-func (s *todoService) SyncTodos(stream proto.TodoService_SyncTodosServer) error {
+func (parseS *todoService) SyncTodos(parseStream proto.TodoService_SyncTodosServer) error {
 	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
+		parseReq, parseErr := parseStream.Recv()
+		if parseErr == io.EOF {
 			return nil
 		}
-		if err != nil {
-			return err
+		if parseErr != nil {
+			return parseErr
 		}
 
-		var resp *proto.SyncResponse
-		switch action := req.Action.(type) {
+		var parseResp *proto.SyncResponse
+		switch parseAction := parseReq.Action.(type) {
 		case *proto.SyncRequest_Create:
-			todo := &proto.Todo{
-				Id:   fmt.Sprintf("todo-%d", len(s.todos)+1),
-				Text: action.Create.Text,
+			parseTodo := &proto.Todo{
+				Id:   fmt.Sprintf("todo-%d", len(parseS.todos)+1),
+				Text: parseAction.Create.Text,
 			}
-			s.todos = append(s.todos, todo)
-			resp = &proto.SyncResponse{
-				Result: &proto.SyncResponse_Todo{Todo: todo},
+			parseS.todos = append(parseS.todos, parseTodo)
+			parseResp = &proto.SyncResponse{
+				Result: &proto.SyncResponse_Todo{Todo: parseTodo},
 			}
 		case *proto.SyncRequest_Update:
-			for _, todo := range s.todos {
-				if todo.Id == action.Update.Id {
-					todo.Text = action.Update.Text
-					todo.Done = action.Update.Done
-					resp = &proto.SyncResponse{
-						Result: &proto.SyncResponse_Todo{Todo: todo},
+			for _, parseTodo2 := range parseS.todos {
+				if parseTodo2.Id == parseAction.Update.Id {
+					parseTodo2.Text = parseAction.Update.Text
+					parseTodo2.Done = parseAction.Update.Done
+					parseResp = &proto.SyncResponse{
+						Result: &proto.SyncResponse_Todo{Todo: parseTodo2},
 					}
 					break
 				}
 			}
 		case *proto.SyncRequest_Delete:
-			for i, todo := range s.todos {
-				if todo.Id == action.Delete.Id {
-					s.todos = append(s.todos[:i], s.todos[i+1:]...)
-					resp = &proto.SyncResponse{
-						Result: &proto.SyncResponse_Todo{Todo: todo},
+			for parseI, parseTodo3 := range parseS.todos {
+				if parseTodo3.Id == parseAction.Delete.Id {
+					parseS.todos = append(parseS.todos[:parseI], parseS.todos[parseI+1:]...)
+					parseResp = &proto.SyncResponse{
+						Result: &proto.SyncResponse_Todo{Todo: parseTodo3},
 					}
 					break
 				}
 			}
 		}
 
-		if resp == nil {
-			resp = &proto.SyncResponse{
+		if parseResp == nil {
+			parseResp = &proto.SyncResponse{
 				Result: &proto.SyncResponse_Error{Error: "not found"},
 			}
 		}
 
-		if err := stream.Send(resp); err != nil {
-			return err
+		if parseErr2 := parseStream.Send(parseResp); parseErr2 != nil {
+			return parseErr2
 		}
 	}
 }
@@ -136,743 +136,743 @@ type todoJSON struct {
 	Done bool   `json:"done"`
 }
 
-func (h *restHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func (parseH *restHandler) ServeHTTP(parseW http.ResponseWriter, parseR *http.Request) {
+	parseW.Header().Set("Content-Type", "application/json")
 
-	switch r.URL.Path {
+	switch parseR.URL.Path {
 	case "/todos":
-		if r.Method == "GET" {
-			h.listTodos(w, r)
-		} else if r.Method == "POST" {
-			h.createTodo(w, r)
+		if parseR.Method == "GET" {
+			parseH.listTodos(parseW, parseR)
+		} else if parseR.Method == "POST" {
+			parseH.createTodo(parseW, parseR)
 		}
 	case "/todos/update":
-		if r.Method == "PUT" {
-			h.updateTodo(w, r)
+		if parseR.Method == "PUT" {
+			parseH.updateTodo(parseW, parseR)
 		}
 	case "/todos/delete":
-		if r.Method == "DELETE" {
-			h.deleteTodo(w, r)
+		if parseR.Method == "DELETE" {
+			parseH.deleteTodo(parseW, parseR)
 		}
 	default:
-		http.NotFound(w, r)
+		http.NotFound(parseW, parseR)
 	}
 }
 
-func (h *restHandler) createTodo(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Text string `json:"text"`
+func (parseH *restHandler) createTodo(parseW http.ResponseWriter, parseR *http.Request) {
+	var parseReq struct {
+		text string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if parseErr := json.NewDecoder(parseR.Body).Decode(&parseReq); parseErr != nil {
+		http.Error(parseW, parseErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	resp, _ := h.service.CreateTodo(context.Background(), &proto.CreateTodoRequest{Text: req.Text})
-	json.NewEncoder(w).Encode(todoJSON{
-		ID:   resp.Todo.Id,
-		Text: resp.Todo.Text,
-		Done: resp.Todo.Done,
+	parseResp, _ := parseH.service.CreateTodo(context.Background(), &proto.CreateTodoRequest{Text: parseReq.Text})
+	json.NewEncoder(parseW).Encode(todoJSON{
+		ID:   parseResp.Todo.Id,
+		Text: parseResp.Todo.Text,
+		Done: parseResp.Todo.Done,
 	})
 }
 
-func (h *restHandler) listTodos(w http.ResponseWriter, r *http.Request) {
-	resp, _ := h.service.ListTodos(context.Background(), &proto.ListTodosRequest{})
-	todos := make([]todoJSON, len(resp.Todos))
-	for i, t := range resp.Todos {
-		todos[i] = todoJSON{ID: t.Id, Text: t.Text, Done: t.Done}
+func (parseH *restHandler) listTodos(parseW http.ResponseWriter, parseR *http.Request) {
+	parseResp, _ := parseH.service.ListTodos(context.Background(), &proto.ListTodosRequest{})
+	parseTodos := make([]todoJSON, len(parseResp.Todos))
+	for parseI, parseT := range parseResp.Todos {
+		parseTodos[parseI] = todoJSON{ID: parseT.Id, Text: parseT.Text, Done: parseT.Done}
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"todos": todos})
+	json.NewEncoder(parseW).Encode(map[string]interface{}{"todos": parseTodos})
 }
 
-func (h *restHandler) updateTodo(w http.ResponseWriter, r *http.Request) {
-	var req todoJSON
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+func (parseH *restHandler) updateTodo(parseW http.ResponseWriter, parseR *http.Request) {
+	var parseReq todoJSON
+	if parseErr := json.NewDecoder(parseR.Body).Decode(&parseReq); parseErr != nil {
+		http.Error(parseW, parseErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	resp, _ := h.service.UpdateTodo(context.Background(), &proto.UpdateTodoRequest{
-		Id:   req.ID,
-		Text: req.Text,
-		Done: req.Done,
+	parseResp, _ := parseH.service.UpdateTodo(context.Background(), &proto.UpdateTodoRequest{
+		Id:   parseReq.ID,
+		Text: parseReq.Text,
+		Done: parseReq.Done,
 	})
-	json.NewEncoder(w).Encode(todoJSON{
-		ID:   resp.Todo.Id,
-		Text: resp.Todo.Text,
-		Done: resp.Todo.Done,
+	json.NewEncoder(parseW).Encode(todoJSON{
+		ID:   parseResp.Todo.Id,
+		Text: parseResp.Todo.Text,
+		Done: parseResp.Todo.Done,
 	})
 }
 
-func (h *restHandler) deleteTodo(w http.ResponseWriter, r *http.Request) {
-	var req struct {
+func (parseH *restHandler) deleteTodo(parseW http.ResponseWriter, parseR *http.Request) {
+	var parseReq struct {
 		ID string `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if parseErr := json.NewDecoder(parseR.Body).Decode(&parseReq); parseErr != nil {
+		http.Error(parseW, parseErr.Error(), http.StatusBadRequest)
 		return
 	}
 
-	resp, _ := h.service.DeleteTodo(context.Background(), &proto.DeleteTodoRequest{Id: req.ID})
-	json.NewEncoder(w).Encode(map[string]bool{"success": resp.Success})
+	parseResp, _ := parseH.service.DeleteTodo(context.Background(), &proto.DeleteTodoRequest{Id: parseReq.ID})
+	json.NewEncoder(parseW).Encode(map[string]bool{"success": parseResp.Success})
 }
 
 // setupGRPC creates a gRPC server with bridge
-func setupGRPC(b *testing.B) (proto.TodoServiceClient, func()) {
-	b.Helper()
+func setupGRPC(parseB *testing.B) (proto.TodoServiceClient, func()) {
+	parseB.Helper()
 
 	// Create gRPC server
-	grpcServer := grpc.NewServer()
-	service := &todoService{todos: make([]*proto.Todo, 0)}
-	proto.RegisterTodoServiceServer(grpcServer, service)
+	parseGrpcServer := grpc.NewServer()
+	parseService := &todoService{todos: make([]*proto.Todo, 0)}
+	proto.RegisterTodoServiceServer(parseGrpcServer, parseService)
 
 	// Start bridge server
-	bridge := grpctunnel.Wrap(grpcServer)
-	server := httptest.NewServer(bridge)
+	parseBridge := grpctunnel.Wrap(parseGrpcServer)
+	parseServer := httptest.NewServer(parseBridge)
 
 	// Extract host from URL (http://127.0.0.1:12345 -> 127.0.0.1:12345)
-	wsURL := strings.TrimPrefix(server.URL, "http://")
+	parseWsURL := strings.TrimPrefix(parseServer.URL, "http://")
 
 	// Create client
-	conn, err := grpctunnel.Dial(wsURL,
+	parseConn, parseErr := grpctunnel.Dial(parseWsURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
-	if err != nil {
-		b.Fatalf("Failed to create client: %v", err)
+	if parseErr != nil {
+		parseB.Fatalf("Failed to create client: %v", parseErr)
 	}
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	cleanup := func() {
-		conn.Close()
-		server.Close()
-		grpcServer.Stop()
+	parseCleanup := func() {
+		parseConn.Close()
+		parseServer.Close()
+		parseGrpcServer.Stop()
 	}
 
-	return client, cleanup
+	return parseClient, parseCleanup
 }
 
 // setupREST creates a REST server
-func setupREST(b *testing.B) (*http.Client, string, func()) {
-	b.Helper()
+func setupREST(parseB *testing.B) (*http.Client, string, func()) {
+	parseB.Helper()
 
-	service := &todoService{todos: make([]*proto.Todo, 0)}
-	handler := &restHandler{service: service}
-	server := httptest.NewServer(handler)
+	parseService := &todoService{todos: make([]*proto.Todo, 0)}
+	handler := &restHandler{parseService: parseService}
+	parseServer := httptest.NewServer(handler)
 
-	client := &http.Client{
+	parseClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	cleanup := func() {
-		server.Close()
+	parseCleanup := func() {
+		parseServer.Close()
 	}
 
-	return client, server.URL, cleanup
+	return parseClient, parseServer.URL, parseCleanup
 }
 
 // Benchmarks
 
-func BenchmarkGRPC_CreateTodo(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_CreateTodo(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		_, parseErr := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 			Text: "Benchmark task",
 		})
-		if err != nil {
-			b.Fatal(err)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_CreateTodo(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_CreateTodo(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	body := map[string]string{"text": "Benchmark task"}
-	bodyBytes, _ := json.Marshal(body)
+	parseBody := map[string]string{"text": "Benchmark task"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp.Body)
+		parseResp.Body.Close()
 	}
 }
 
-func BenchmarkGRPC_ListTodos(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_ListTodos(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 100 todos
-	for i := 0; i < 100; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("Todo %d", i),
+	for parseI := 0; parseI < 100; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("Todo %d", parseI),
 		})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := client.ListTodos(context.Background(), &proto.ListTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		_, parseErr := parseClient.ListTodos(context.Background(), &proto.ListTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_ListTodos(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_ListTodos(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 100 todos
-	body := map[string]string{"text": "Todo"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 100; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "Todo"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 100; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
 	}
 }
 
-func BenchmarkGRPC_UpdateTodo(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_UpdateTodo(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
 	// Create a todo to update
-	createResp, _ := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+	parseCreateResp, _ := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 		Text: "Original",
 	})
-	todoID := createResp.Todo.Id
+	parseTodoID := parseCreateResp.Todo.Id
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := client.UpdateTodo(context.Background(), &proto.UpdateTodoRequest{
-			Id:   todoID,
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		_, parseErr := parseClient.UpdateTodo(context.Background(), &proto.UpdateTodoRequest{
+			Id:   parseTodoID,
 			Text: "Updated",
 			Done: true,
 		})
-		if err != nil {
-			b.Fatal(err)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_UpdateTodo(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_UpdateTodo(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// Create a todo to update
-	createBody := map[string]string{"text": "Original"}
-	createBytes, _ := json.Marshal(createBody)
-	createResp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(createBytes))
-	var createResult todoJSON
-	json.NewDecoder(createResp.Body).Decode(&createResult)
-	createResp.Body.Close()
+	parseCreateBody := map[string]string{"text": "Original"}
+	parseCreateBytes, _ := json.Marshal(parseCreateBody)
+	parseCreateResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseCreateBytes))
+	var parseCreateResult todoJSON
+	json.NewDecoder(parseCreateResp.Body).Decode(&parseCreateResult)
+	parseCreateResp.Body.Close()
 
-	updateBody := todoJSON{ID: createResult.ID, Text: "Updated", Done: true}
-	updateBytes, _ := json.Marshal(updateBody)
+	parseUpdateBody := todoJSON{ID: parseCreateResult.ID, Text: "Updated", Done: true}
+	parseUpdateBytes, _ := json.Marshal(parseUpdateBody)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req, _ := http.NewRequest("PUT", url+"/todos/update", bytes.NewReader(updateBytes))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseReq, _ := http.NewRequest("PUT", parseUrl+"/todos/update", bytes.NewReader(parseUpdateBytes))
+		parseReq.Header.Set("Content-Type", "application/json")
+		parseResp, parseErr := parseClient.Do(parseReq)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp.Body)
+		parseResp.Body.Close()
 	}
 }
 
-func BenchmarkGRPC_DeleteTodo(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_DeleteTodo(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseB.StopTimer()
 		// Create a todo to delete
-		createResp, _ := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+		parseCreateResp, _ := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 			Text: "To be deleted",
 		})
-		b.StartTimer()
+		parseB.StartTimer()
 
-		_, err := client.DeleteTodo(context.Background(), &proto.DeleteTodoRequest{
-			Id: createResp.Todo.Id,
+		_, parseErr := parseClient.DeleteTodo(context.Background(), &proto.DeleteTodoRequest{
+			Id: parseCreateResp.Todo.Id,
 		})
-		if err != nil {
-			b.Fatal(err)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_DeleteTodo(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_DeleteTodo(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseB.StopTimer()
 		// Create a todo to delete
-		createBody := map[string]string{"text": "To be deleted"}
-		createBytes, _ := json.Marshal(createBody)
-		createResp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(createBytes))
-		var createResult todoJSON
-		json.NewDecoder(createResp.Body).Decode(&createResult)
-		createResp.Body.Close()
-		b.StartTimer()
+		parseCreateBody := map[string]string{"text": "To be deleted"}
+		parseCreateBytes, _ := json.Marshal(parseCreateBody)
+		parseCreateResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseCreateBytes))
+		var parseCreateResult todoJSON
+		json.NewDecoder(parseCreateResp.Body).Decode(&parseCreateResult)
+		parseCreateResp.Body.Close()
+		parseB.StartTimer()
 
-		deleteBody := map[string]string{"id": createResult.ID}
-		deleteBytes, _ := json.Marshal(deleteBody)
-		req, _ := http.NewRequest("DELETE", url+"/todos/delete", bytes.NewReader(deleteBytes))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			b.Fatal(err)
+		parseDeleteBody := map[string]string{"id": parseCreateResult.ID}
+		parseDeleteBytes, _ := json.Marshal(parseDeleteBody)
+		parseReq, _ := http.NewRequest("DELETE", parseUrl+"/todos/delete", bytes.NewReader(parseDeleteBytes))
+		parseReq.Header.Set("Content-Type", "application/json")
+		parseResp, parseErr := parseClient.Do(parseReq)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp.Body)
+		parseResp.Body.Close()
 	}
 }
 
 // Payload size benchmarks - measures compression efficiency
-func BenchmarkGRPC_PayloadSize_10Items(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_PayloadSize_10Items(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 10 todos
-	for i := 0; i < 10; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("This is a longer todo text to measure payload size differences between Protobuf and JSON #%d", i),
+	for parseI := 0; parseI < 10; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("This is a longer todo text to measure payload size differences between Protobuf and JSON #%d", parseI),
 		})
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.ListTodos(context.Background(), &proto.ListTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp, parseErr := parseClient.ListTodos(context.Background(), &proto.ListTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 		// Estimate protobuf size
-		size := gproto.Size(resp)
-		b.ReportMetric(float64(size)/1024.0, "KB/op")
+		parseSize := gproto.Size(parseResp)
+		parseB.ReportMetric(float64(parseSize)/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkREST_PayloadSize_10Items(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_PayloadSize_10Items(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 10 todos
-	body := map[string]string{"text": "This is a longer todo text to measure payload size differences between Protobuf and JSON"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 10; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "This is a longer todo text to measure payload size differences between Protobuf and JSON"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 10; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		data, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		b.ReportMetric(float64(len(data))/1024.0, "KB/op")
+		parseData, _ := io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
+		parseB.ReportMetric(float64(len(parseData))/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkGRPC_PayloadSize_100Items(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_PayloadSize_100Items(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	for i := 0; i < 100; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("Todo with medium length text for realistic payload testing #%d", i),
+	for parseI := 0; parseI < 100; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("Todo with medium length text for realistic payload testing #%d", parseI),
 		})
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.ListTodos(context.Background(), &proto.ListTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp, parseErr := parseClient.ListTodos(context.Background(), &proto.ListTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		size := gproto.Size(resp)
-		b.ReportMetric(float64(size)/1024.0, "KB/op")
+		parseSize := gproto.Size(parseResp)
+		parseB.ReportMetric(float64(parseSize)/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkREST_PayloadSize_100Items(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_PayloadSize_100Items(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	body := map[string]string{"text": "Todo with medium length text for realistic payload testing"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 100; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "Todo with medium length text for realistic payload testing"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 100; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		data, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		b.ReportMetric(float64(len(data))/1024.0, "KB/op")
+		parseData, _ := io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
+		parseB.ReportMetric(float64(len(parseData))/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkGRPC_PayloadSize_1000Items(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_PayloadSize_1000Items(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	for i := 0; i < 1000; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("Todo with medium length text for realistic payload testing #%d", i),
+	for parseI := 0; parseI < 1000; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("Todo with medium length text for realistic payload testing #%d", parseI),
 		})
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.ListTodos(context.Background(), &proto.ListTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp, parseErr := parseClient.ListTodos(context.Background(), &proto.ListTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		size := gproto.Size(resp)
-		b.ReportMetric(float64(size)/1024.0, "KB/op")
+		parseSize := gproto.Size(parseResp)
+		parseB.ReportMetric(float64(parseSize)/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkREST_PayloadSize_1000Items(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_PayloadSize_1000Items(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	body := map[string]string{"text": "Todo with medium length text for realistic payload testing"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 1000; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "Todo with medium length text for realistic payload testing"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 1000; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ReportAllocs()
-	b.ReportMetric(0, "payload-bytes")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ReportMetric(0, "payload-bytes")
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		data, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		b.ReportMetric(float64(len(data))/1024.0, "KB/op")
+		parseData, _ := io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
+		parseB.ReportMetric(float64(len(parseData))/1024.0, "KB/op")
 	}
 }
 
-func BenchmarkGRPC_StreamingTodos(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_StreamingTodos(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 100 todos
-	for i := 0; i < 100; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("Todo %d", i),
+	for parseI := 0; parseI < 100; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("Todo %d", parseI),
 		})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		stream, err := client.StreamTodos(context.Background(), &proto.StreamTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseStream, parseErr := parseClient.StreamTodos(context.Background(), &proto.StreamTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 		for {
-			_, err := stream.Recv()
-			if err == io.EOF {
+			_, parseErr2 := parseStream.Recv()
+			if parseErr2 == io.EOF {
 				break
 			}
-			if err != nil {
-				b.Fatal(err)
+			if parseErr2 != nil {
+				parseB.Fatal(parseErr2)
 			}
 		}
 	}
 }
 
 // REST can't do server streaming, so we simulate with pagination
-func BenchmarkREST_StreamingTodos_Simulation(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_StreamingTodos_Simulation(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 100 todos
-	body := map[string]string{"text": "Todo"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 100; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "Todo"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 100; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
 		// Simulate streaming by fetching all at once (what REST would do)
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
 	}
 }
 
 // Latency benchmarks - measure time to first byte and connection overhead
-func BenchmarkGRPC_ConnectionReuse_10Requests(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_ConnectionReuse_10Requests(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
 		// 10 sequential requests on same connection
-		for j := 0; j < 10; j++ {
-			_, err := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+		for parseJ := 0; parseJ < 10; parseJ++ {
+			_, parseErr := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 				Text: "Task",
 			})
-			if err != nil {
-				b.Fatal(err)
+			if parseErr != nil {
+				parseB.Fatal(parseErr)
 			}
 		}
 	}
 }
 
-func BenchmarkREST_ConnectionReuse_10Requests(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_ConnectionReuse_10Requests(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	bodyBytes, _ := json.Marshal(map[string]string{"text": "Task"})
+	parseBodyBytes, _ := json.Marshal(map[string]string{"text": "Task"})
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
 		// 10 sequential requests - HTTP keep-alive helps but still has overhead
-		for j := 0; j < 10; j++ {
-			resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-			if err != nil {
-				b.Fatal(err)
+		for parseJ := 0; parseJ < 10; parseJ++ {
+			parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+			if parseErr != nil {
+				parseB.Fatal(parseErr)
 			}
-			io.ReadAll(resp.Body)
-			resp.Body.Close()
+			io.ReadAll(parseResp.Body)
+			parseResp.Body.Close()
 		}
 	}
 }
 
 // Large dataset streaming - gRPC can stream without loading all into memory
-func BenchmarkGRPC_StreamLargeDataset_1000Items(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_StreamLargeDataset_1000Items(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 1000 todos
-	for i := 0; i < 1000; i++ {
-		client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
-			Text: fmt.Sprintf("Todo item with realistic text length for streaming benchmark #%d", i),
+	for parseI := 0; parseI < 1000; parseI++ {
+		parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+			Text: fmt.Sprintf("Todo item with realistic text length for streaming benchmark #%d", parseI),
 		})
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		stream, err := client.StreamTodos(context.Background(), &proto.StreamTodosRequest{})
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
+		parseStream, parseErr := parseClient.StreamTodos(context.Background(), &proto.StreamTodosRequest{})
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		count := 0
+		parseCount := 0
 		for {
-			_, err := stream.Recv()
-			if err == io.EOF {
+			_, parseErr2 := parseStream.Recv()
+			if parseErr2 == io.EOF {
 				break
 			}
-			if err != nil {
-				b.Fatal(err)
+			if parseErr2 != nil {
+				parseB.Fatal(parseErr2)
 			}
-			count++
+			parseCount++
 		}
 	}
 }
 
-func BenchmarkREST_LargeDataset_1000Items(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_LargeDataset_1000Items(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// Pre-populate with 1000 todos
-	body := map[string]string{"text": "Todo item with realistic text length for streaming benchmark"}
-	bodyBytes, _ := json.Marshal(body)
-	for i := 0; i < 1000; i++ {
-		resp, _ := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		resp.Body.Close()
+	parseBody := map[string]string{"text": "Todo item with realistic text length for streaming benchmark"}
+	parseBodyBytes, _ := json.Marshal(parseBody)
+	for parseI := 0; parseI < 1000; parseI++ {
+		parseResp, _ := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		parseResp.Body.Close()
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ResetTimer()
+	for parseI2 := 0; parseI2 < parseB.N; parseI2++ {
 		// REST must load ALL data into memory at once
-		resp, err := client.Get(url + "/todos")
-		if err != nil {
-			b.Fatal(err)
+		parseResp2, parseErr := parseClient.Get(parseUrl + "/todos")
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		data, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		parseData, _ := io.ReadAll(parseResp2.Body)
+		parseResp2.Body.Close()
 
 		// Parse all JSON at once
-		var result map[string][]todoJSON
-		json.Unmarshal(data, &result)
+		var parseResult map[string][]todoJSON
+		json.Unmarshal(parseData, &parseResult)
 	}
 }
 
 // Concurrent requests - HTTP/2 multiplexing advantage
-func BenchmarkGRPC_ConcurrentRequests_10Parallel(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_ConcurrentRequests_10Parallel(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			_, err := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+	parseB.RunParallel(func(parsePb *testing.PB) {
+		for parsePb.Next() {
+			_, parseErr := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 				Text: "Concurrent task",
 			})
-			if err != nil {
-				b.Fatal(err)
+			if parseErr != nil {
+				parseB.Fatal(parseErr)
 			}
 		}
 	})
 }
 
-func BenchmarkREST_ConcurrentRequests_10Parallel(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_ConcurrentRequests_10Parallel(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	bodyBytes, _ := json.Marshal(map[string]string{"text": "Concurrent task"})
+	parseBodyBytes, _ := json.Marshal(map[string]string{"text": "Concurrent task"})
 
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-			if err != nil {
-				b.Fatal(err)
+	parseB.RunParallel(func(parsePb *testing.PB) {
+		for parsePb.Next() {
+			parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+			if parseErr != nil {
+				parseB.Fatal(parseErr)
 			}
-			io.ReadAll(resp.Body)
-			resp.Body.Close()
+			io.ReadAll(parseResp.Body)
+			parseResp.Body.Close()
 		}
 	})
 }
 
 // Header overhead - REST sends more metadata per request
-func BenchmarkGRPC_MinimalRequest(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_MinimalRequest(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+	parseB.ReportAllocs()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		_, parseErr := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 			Text: "X", // Minimal payload
 		})
-		if err != nil {
-			b.Fatal(err)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_MinimalRequest(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_MinimalRequest(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	bodyBytes, _ := json.Marshal(map[string]string{"text": "X"}) // Minimal payload
+	parseBodyBytes, _ := json.Marshal(map[string]string{"text": "X"}) // Minimal payload
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp.Body)
+		parseResp.Body.Close()
 	}
 }
 
 // Bidirectional streaming - only gRPC can do this
-func BenchmarkGRPC_BidirectionalStream_100Messages(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_BidirectionalStream_100Messages(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		stream, err := client.SyncTodos(context.Background())
-		if err != nil {
-			b.Fatal(err)
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseStream, parseErr := parseClient.SyncTodos(context.Background())
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 
 		// Send 100 messages
-		for j := 0; j < 100; j++ {
-			err := stream.Send(&proto.SyncRequest{
+		for parseJ := 0; parseJ < 100; parseJ++ {
+			parseErr2 := parseStream.Send(&proto.SyncRequest{
 				Action: &proto.SyncRequest_Create{
 					Create: &proto.CreateTodoRequest{Text: "Sync task"},
 				},
 			})
-			if err != nil {
-				b.Fatal(err)
+			if parseErr2 != nil {
+				parseB.Fatal(parseErr2)
 			}
 
 			// Receive response
-			_, err = stream.Recv()
-			if err != nil {
-				b.Fatal(err)
+			_, parseErr2 = parseStream.Recv()
+			if parseErr2 != nil {
+				parseB.Fatal(parseErr2)
 			}
 		}
 
-		stream.CloseSend()
+		parseStream.CloseSend()
 	}
 }
 
 // REST equivalent would require 100 HTTP requests
-func BenchmarkREST_Bidirectional_100Messages(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_Bidirectional_100Messages(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
-	bodyBytes, _ := json.Marshal(map[string]string{"text": "Sync task"})
+	parseBodyBytes, _ := json.Marshal(map[string]string{"text": "Sync task"})
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
 		// REST must make 100 separate HTTP requests (no streaming)
-		for j := 0; j < 100; j++ {
-			resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-			if err != nil {
-				b.Fatal(err)
+		for parseJ := 0; parseJ < 100; parseJ++ {
+			parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+			if parseErr != nil {
+				parseB.Fatal(parseErr)
 			}
-			io.ReadAll(resp.Body)
-			resp.Body.Close()
+			io.ReadAll(parseResp.Body)
+			parseResp.Body.Close()
 		}
 	}
 }
@@ -886,29 +886,29 @@ type ComplexData struct {
 	Timestamp int64                  `json:"timestamp"`
 }
 
-func BenchmarkGRPC_ComplexSerialization(b *testing.B) {
-	client, cleanup := setupGRPC(b)
-	defer cleanup()
+func BenchmarkGRPC_ComplexSerialization(parseB *testing.B) {
+	parseClient, parseCleanup := setupGRPC(parseB)
+	defer parseCleanup()
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	parseB.ReportAllocs()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
 		// Protobuf handles complex types efficiently
-		_, err := client.CreateTodo(context.Background(), &proto.CreateTodoRequest{
+		_, parseErr := parseClient.CreateTodo(context.Background(), &proto.CreateTodoRequest{
 			Text: "Complex data with nested structures and metadata fields for serialization testing",
 		})
-		if err != nil {
-			b.Fatal(err)
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
 	}
 }
 
-func BenchmarkREST_ComplexSerialization(b *testing.B) {
-	client, url, cleanup := setupREST(b)
-	defer cleanup()
+func BenchmarkREST_ComplexSerialization(parseB *testing.B) {
+	parseClient, parseUrl, parseCleanup := setupREST(parseB)
+	defer parseCleanup()
 
 	// JSON serialization of complex nested structures
-	complexData := ComplexData{
+	parseComplexData := ComplexData{
 		ID: "test-123",
 		Metadata: map[string]interface{}{
 			"key1": "value1",
@@ -919,16 +919,16 @@ func BenchmarkREST_ComplexSerialization(b *testing.B) {
 		Nested:    []map[string]string{{"a": "b"}, {"c": "d"}},
 		Timestamp: time.Now().Unix(),
 	}
-	bodyBytes, _ := json.Marshal(complexData)
+	parseBodyBytes, _ := json.Marshal(parseComplexData)
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		resp, err := client.Post(url+"/todos", "application/json", bytes.NewReader(bodyBytes))
-		if err != nil {
-			b.Fatal(err)
+	parseB.ReportAllocs()
+	parseB.ResetTimer()
+	for parseI := 0; parseI < parseB.N; parseI++ {
+		parseResp, parseErr := parseClient.Post(parseUrl+"/todos", "application/json", bytes.NewReader(parseBodyBytes))
+		if parseErr != nil {
+			parseB.Fatal(parseErr)
 		}
-		io.ReadAll(resp.Body)
-		resp.Body.Close()
+		io.ReadAll(parseResp.Body)
+		parseResp.Body.Close()
 	}
 }

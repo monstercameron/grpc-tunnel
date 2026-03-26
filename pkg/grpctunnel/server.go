@@ -26,31 +26,31 @@ type serverOptions struct {
 
 // WithOriginCheck sets a custom origin validation function.
 // If not set, all origins are allowed (development mode).
-func WithOriginCheck(fn func(r *http.Request) bool) ServerOption {
-	return func(o *serverOptions) {
-		o.checkOrigin = fn
+func WithOriginCheck(parseFn func(r *http.Request) bool) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.checkOrigin = parseFn
 	}
 }
 
 // WithBufferSizes sets custom WebSocket buffer sizes.
-func WithBufferSizes(read, write int) ServerOption {
-	return func(o *serverOptions) {
-		o.readBufferSize = read
-		o.writeBufferSize = write
+func WithBufferSizes(parseRead, parseWrite int) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.readBufferSize = parseRead
+		parseO.writeBufferSize = parseWrite
 	}
 }
 
 // WithConnectHook sets a callback for when clients connect.
-func WithConnectHook(fn func(r *http.Request)) ServerOption {
-	return func(o *serverOptions) {
-		o.onConnect = fn
+func WithConnectHook(parseFn func(r *http.Request)) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.onConnect = parseFn
 	}
 }
 
 // WithDisconnectHook sets a callback for when clients disconnect.
-func WithDisconnectHook(fn func(r *http.Request)) ServerOption {
-	return func(o *serverOptions) {
-		o.onDisconnect = fn
+func WithDisconnectHook(parseFn func(r *http.Request)) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.onDisconnect = parseFn
 	}
 }
 
@@ -62,49 +62,49 @@ func WithDisconnectHook(fn func(r *http.Request)) ServerOption {
 //	grpcServer := grpc.NewServer()
 //	proto.RegisterYourServiceServer(grpcServer, &yourImpl{})
 //	http.ListenAndServe(":8080", grpctunnel.Wrap(grpcServer))
-func Wrap(grpcServer *grpc.Server, opts ...ServerOption) http.Handler {
-	options := &serverOptions{
+func Wrap(parseGrpcServer *grpc.Server, parseOpts ...ServerOption) http.Handler {
+	parseOptions := &serverOptions{
 		readBufferSize:  4096,
 		writeBufferSize: 4096,
-		checkOrigin:     func(r *http.Request) bool { return true },
+		checkOrigin:     func(parseR *http.Request) bool { return true },
 	}
 
-	for _, opt := range opts {
-		opt(options)
+	for _, parseOpt := range parseOpts {
+		parseOpt(parseOptions)
 	}
 
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  options.readBufferSize,
-		WriteBufferSize: options.writeBufferSize,
-		CheckOrigin:     options.checkOrigin,
+	parseUpgrader := websocket.Upgrader{
+		ReadBufferSize:  parseOptions.readBufferSize,
+		WriteBufferSize: parseOptions.writeBufferSize,
+		CheckOrigin:     parseOptions.checkOrigin,
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
 		// Upgrade to WebSocket
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
+		parseWs, parseErr := parseUpgrader.Upgrade(parseW, parseR2, nil)
+		if parseErr != nil {
 			return
 		}
-		defer ws.Close()
+		defer parseWs.Close()
 
 		// Lifecycle hooks
-		if options.onConnect != nil {
-			options.onConnect(r)
+		if parseOptions.onConnect != nil {
+			parseOptions.onConnect(parseR2)
 		}
 		defer func() {
-			if options.onDisconnect != nil {
-				options.onDisconnect(r)
+			if parseOptions.onDisconnect != nil {
+				parseOptions.onDisconnect(parseR2)
 			}
 		}()
 
 		// Wrap WebSocket as net.Conn
-		conn := newWebSocketConn(ws)
-		defer conn.Close()
+		parseConn := newWebSocketConn(parseWs)
+		defer parseConn.Close()
 
 		// Serve gRPC over HTTP/2 on the WebSocket connection
-		h2Server := &http2.Server{}
-		h2Server.ServeConn(conn, &http2.ServeConnOpts{
-			Handler: h2c.NewHandler(grpcServer, h2Server),
+		parseH2Server := &http2.Server{}
+		parseH2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+			Handler: h2c.NewHandler(parseGrpcServer, parseH2Server),
 		})
 	})
 }
@@ -119,14 +119,14 @@ func Wrap(grpcServer *grpc.Server, opts ...ServerOption) http.Handler {
 //
 //	lis, _ := net.Listen("tcp", ":8080")
 //	grpctunnel.Serve(lis, grpcServer)
-func Serve(listener net.Listener, grpcServer *grpc.Server, opts ...ServerOption) error {
-	server := &http.Server{
-		Handler:      Wrap(grpcServer, opts...),
+func Serve(parseListener net.Listener, parseGrpcServer *grpc.Server, parseOpts ...ServerOption) error {
+	parseServer := &http.Server{
+		Handler:      Wrap(parseGrpcServer, parseOpts...),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	return server.Serve(listener)
+	return parseServer.Serve(parseListener)
 }
 
 // ListenAndServe listens on the TCP network address and serves gRPC over WebSocket.
@@ -137,13 +137,13 @@ func Serve(listener net.Listener, grpcServer *grpc.Server, opts ...ServerOption)
 //	grpcServer := grpc.NewServer()
 //	proto.RegisterYourServiceServer(grpcServer, &yourImpl{})
 //	grpctunnel.ListenAndServe(":8080", grpcServer)
-func ListenAndServe(addr string, grpcServer *grpc.Server, opts ...ServerOption) error {
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      Wrap(grpcServer, opts...),
+func ListenAndServe(parseAddr string, parseGrpcServer *grpc.Server, parseOpts ...ServerOption) error {
+	parseServer := &http.Server{
+		Addr:         parseAddr,
+		Handler:      Wrap(parseGrpcServer, parseOpts...),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	return server.ListenAndServe()
+	return parseServer.ListenAndServe()
 }

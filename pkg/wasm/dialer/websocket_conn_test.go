@@ -9,7 +9,7 @@ import (
 )
 
 // TestWebSocketConn_NetConnInterface ensures that WebSocketConn implements the net.Conn interface.
-func TestWebSocketConn_NetConnInterface(t *testing.T) {
+func TestWebSocketConn_NetConnInterface(parseT *testing.T) {
 	// We can't actually create a real WebSocket in a standard Go test environment,
 	// as it requires a browser's JS runtime.
 	// Instead, we'll create a mock js.Value that simulates a WebSocket.
@@ -17,19 +17,19 @@ func TestWebSocketConn_NetConnInterface(t *testing.T) {
 
 	// Create a mock js.Value that has the methods expected by NewWebSocketConn.
 	// In a real WASM environment, this would be js.Global().Get(jsGlobalWebSocket).New(url).
-	mockBrowserWebSocket := js.ValueOf(map[string]interface{}{
+	parseMockBrowserWebSocket := js.ValueOf(map[string]interface{}{
 		jsPropertyReadyState: js.ValueOf(1), // CONNECTING or OPEN
-		jsMethodSend:         js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
-		jsMethodClose:        js.FuncOf(func(this js.Value, functionArgs []js.Value) interface{} { return nil }),
+		jsMethodSend:         js.FuncOf(func(parseThis js.Value, parseFunctionArgs []js.Value) interface{} { return nil }),
+		jsMethodClose:        js.FuncOf(func(parseThis2 js.Value, parseFunctionArgs2 []js.Value) interface{} { return nil }),
 	})
 
 	// Attempt to create a WebSocketConn from the mock.
 	// This should not panic and should return a non-nil net.Conn.
-	var networkConnection net.Conn
-	networkConnection = NewWebSocketConn(mockBrowserWebSocket)
+	var parseNetworkConnection net.Conn
+	parseNetworkConnection = NewWebSocketConn(parseMockBrowserWebSocket)
 
-	if networkConnection == nil {
-		t.Fatal("NewWebSocketConn returned nil, expected a net.Conn implementation")
+	if parseNetworkConnection == nil {
+		parseT.Fatal("NewWebSocketConn returned nil, expected a net.Conn implementation")
 	}
 
 	// Further checks can be added here if specific mock behaviors are implemented

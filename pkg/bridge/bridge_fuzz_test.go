@@ -5,121 +5,121 @@ import (
 )
 
 // FuzzWebSocketConnWrite tests Write method with fuzz inputs
-func FuzzWebSocketConnWrite(f *testing.F) {
+func FuzzWebSocketConnWrite(parseF *testing.F) {
 	// Seed corpus
-	f.Add([]byte("hello"))
-	f.Add([]byte(""))
-	f.Add([]byte{0x00})
-	f.Add([]byte{0xFF, 0xFE, 0xFD})
+	parseF.Add([]byte("hello"))
+	parseF.Add([]byte(""))
+	parseF.Add([]byte{0x00})
+	parseF.Add([]byte{0xFF, 0xFE, 0xFD})
 
-	f.Fuzz(func(t *testing.T, data []byte) {
-		if len(data) > 1024*1024 { // Cap at 1MB for performance
+	parseF.Fuzz(func(parseT *testing.T, parseData []byte) {
+		if len(parseData) > 1024*1024 { // Cap at 1MB for performance
 			return
 		}
 
-		mock := &mockWebSocket{}
+		parseMock := &mockWebSocket{}
 
 		// Should not panic
-		err := mock.WriteMessage(1, data)
+		parseErr := parseMock.WriteMessage(1, parseData)
 
-		if err == nil && len(mock.writeMessages) != 1 {
-			t.Errorf("Write should have 1 message")
+		if parseErr == nil && len(parseMock.writeMessages) != 1 {
+			parseT.Errorf("Write should have 1 message")
 		}
 	})
 }
 
 // FuzzWebSocketConnRead tests Read method with fuzz inputs
-func FuzzWebSocketConnRead(f *testing.F) {
+func FuzzWebSocketConnRead(parseF *testing.F) {
 	// Seed corpus
-	f.Add([]byte("test data"))
-	f.Add([]byte(""))
-	f.Add([]byte{0x00, 0x01, 0x02})
+	parseF.Add([]byte("test data"))
+	parseF.Add([]byte(""))
+	parseF.Add([]byte{0x00, 0x01, 0x02})
 
-	f.Fuzz(func(t *testing.T, data []byte) {
-		if len(data) > 1024*1024 { // Cap at 1MB for performance
+	parseF.Fuzz(func(parseT *testing.T, parseData []byte) {
+		if len(parseData) > 1024*1024 { // Cap at 1MB for performance
 			return
 		}
 
-		mock := &mockWebSocket{
-			readMessages: [][]byte{data},
+		parseMock := &mockWebSocket{
+			readMessages: [][]byte{parseData},
 		}
 
 		// Should not panic
 		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("ReadMessage panicked: %v", r)
+			if parseR := recover(); parseR != nil {
+				parseT.Errorf("ReadMessage panicked: %v", parseR)
 			}
 		}()
 
-		msgType, msgData, err := mock.ReadMessage()
+		parseMsgType, parseMsgData, parseErr := parseMock.ReadMessage()
 
-		if err == nil {
-			if len(msgData) != len(data) {
-				t.Errorf("Read returned %d bytes, expected %d", len(msgData), len(data))
+		if parseErr == nil {
+			if len(parseMsgData) != len(parseData) {
+				parseT.Errorf("Read returned %d bytes, expected %d", len(parseMsgData), len(parseData))
 			}
-			_ = msgType
+			_ = parseMsgType
 		}
 	})
 }
 
 // FuzzBinaryMessage tests handling of arbitrary binary data
-func FuzzBinaryMessage(f *testing.F) {
+func FuzzBinaryMessage(parseF *testing.F) {
 	// Seed with various binary patterns
-	f.Add([]byte{0x00})
-	f.Add([]byte{0xFF})
-	f.Add([]byte{0x00, 0xFF, 0x00, 0xFF})
-	f.Add([]byte("\x00\x01\x02\x03\x04\x05"))
+	parseF.Add([]byte{0x00})
+	parseF.Add([]byte{0xFF})
+	parseF.Add([]byte{0x00, 0xFF, 0x00, 0xFF})
+	parseF.Add([]byte("\x00\x01\x02\x03\x04\x05"))
 
-	f.Fuzz(func(t *testing.T, data []byte) {
-		if len(data) > 100000 { // Cap for performance
+	parseF.Fuzz(func(parseT *testing.T, parseData []byte) {
+		if len(parseData) > 100000 { // Cap for performance
 			return
 		}
 
-		mock := &mockWebSocket{
-			readMessages: [][]byte{data},
+		parseMock := &mockWebSocket{
+			readMessages: [][]byte{parseData},
 		}
 
 		// Read should handle any binary data without panicking
 		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("ReadMessage panicked on binary data: %v", r)
+			if parseR := recover(); parseR != nil {
+				parseT.Errorf("ReadMessage panicked on binary data: %v", parseR)
 			}
 		}()
 
-		mock.ReadMessage()
+		parseMock.ReadMessage()
 	})
 }
 
 // FuzzMessageSizes tests various message sizes
-func FuzzMessageSizes(f *testing.F) {
+func FuzzMessageSizes(parseF *testing.F) {
 	// Seed with boundary sizes
-	f.Add(0)
-	f.Add(1)
-	f.Add(64)
-	f.Add(1024)
-	f.Add(65535)
+	parseF.Add(0)
+	parseF.Add(1)
+	parseF.Add(64)
+	parseF.Add(1024)
+	parseF.Add(65535)
 
-	f.Fuzz(func(t *testing.T, size int) {
-		if size < 0 || size > 100000 { // Cap for performance
+	parseF.Fuzz(func(parseT *testing.T, parseSize int) {
+		if parseSize < 0 || parseSize > 100000 { // Cap for performance
 			return
 		}
 
-		data := make([]byte, size)
-		for i := range data {
-			data[i] = byte(i % 256)
+		parseData := make([]byte, parseSize)
+		for parseI := range parseData {
+			parseData[parseI] = byte(parseI % 256)
 		}
 
-		mock := &mockWebSocket{
-			readMessages: [][]byte{data},
+		parseMock := &mockWebSocket{
+			readMessages: [][]byte{parseData},
 		}
 
 		// Should handle any size without panicking
 		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("Panicked on message size %d: %v", size, r)
+			if parseR := recover(); parseR != nil {
+				parseT.Errorf("Panicked on message size %d: %v", parseSize, parseR)
 			}
 		}()
 
-		mock.ReadMessage()
+		parseMock.ReadMessage()
 	})
 }

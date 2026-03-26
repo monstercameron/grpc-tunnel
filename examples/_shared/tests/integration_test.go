@@ -26,17 +26,17 @@ type mockTodoService struct {
 	proto.UnimplementedTodoServiceServer
 }
 
-func (s *mockTodoService) CreateTodo(ctx context.Context, req *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
+func (parseS *mockTodoService) CreateTodo(parseCtx context.Context, parseReq *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
 	return &proto.CreateTodoResponse{
 		Todo: &proto.Todo{
 			Id:   "test-123",
-			Text: req.Text,
+			Text: parseReq.Text,
 			Done: false,
 		},
 	}, nil
 }
 
-func (s *mockTodoService) ListTodos(ctx context.Context, req *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
+func (parseS *mockTodoService) ListTodos(parseCtx context.Context, parseReq *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
 	return &proto.ListTodosResponse{
 		Todos: []*proto.Todo{
 			{Id: "1", Text: "Test Todo", Done: false},
@@ -44,64 +44,64 @@ func (s *mockTodoService) ListTodos(ctx context.Context, req *proto.ListTodosReq
 	}, nil
 }
 
-func (s *mockTodoService) StreamTodos(req *proto.StreamTodosRequest, stream proto.TodoService_StreamTodosServer) error {
-	todos := []*proto.Todo{
+func (parseS *mockTodoService) StreamTodos(parseReq *proto.StreamTodosRequest, parseStream proto.TodoService_StreamTodosServer) error {
+	parseTodos := []*proto.Todo{
 		{Id: "1", Text: "First Todo", Done: false},
 		{Id: "2", Text: "Second Todo", Done: true},
 		{Id: "3", Text: "Third Todo", Done: false},
 	}
 
-	for _, todo := range todos {
-		if err := stream.Send(&proto.StreamTodosResponse{Todo: todo}); err != nil {
-			return err
+	for _, parseTodo := range parseTodos {
+		if parseErr := parseStream.Send(&proto.StreamTodosResponse{Todo: parseTodo}); parseErr != nil {
+			return parseErr
 		}
 		time.Sleep(10 * time.Millisecond) // Simulate streaming delay
 	}
 	return nil
 }
 
-func (s *mockTodoService) BulkCreateTodos(stream proto.TodoService_BulkCreateTodosServer) error {
-	count := int32(0)
+func (parseS *mockTodoService) BulkCreateTodos(parseStream proto.TodoService_BulkCreateTodosServer) error {
+	parseCount := int32(0)
 	for {
-		_, err := stream.Recv()
-		if err != nil {
-			if err.Error() == "EOF" {
-				return stream.SendAndClose(&proto.BulkCreateResponse{CreatedCount: count})
+		_, parseErr := parseStream.Recv()
+		if parseErr != nil {
+			if parseErr.Error() == "EOF" {
+				return parseStream.SendAndClose(&proto.BulkCreateResponse{CreatedCount: parseCount})
 			}
-			return err
+			return parseErr
 		}
-		count++
+		parseCount++
 		// Simulate processing
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 
-func (s *mockTodoService) SyncTodos(stream proto.TodoService_SyncTodosServer) error {
+func (parseS *mockTodoService) SyncTodos(parseStream proto.TodoService_SyncTodosServer) error {
 	for {
-		req, err := stream.Recv()
-		if err != nil {
-			if err.Error() == "EOF" {
+		parseReq, parseErr := parseStream.Recv()
+		if parseErr != nil {
+			if parseErr.Error() == "EOF" {
 				return nil
 			}
-			return err
+			return parseErr
 		}
 
 		// Echo back results
-		switch action := req.Action.(type) {
+		switch parseAction := parseReq.Action.(type) {
 		case *proto.SyncRequest_Create:
-			stream.Send(&proto.SyncResponse{
+			parseStream.Send(&proto.SyncResponse{
 				Result: &proto.SyncResponse_Todo{
-					Todo: &proto.Todo{Id: "sync-1", Text: action.Create.Text, Done: false},
+					Todo: &proto.Todo{Id: "sync-1", Text: parseAction.Create.Text, Done: false},
 				},
 			})
 		case *proto.SyncRequest_Update:
-			stream.Send(&proto.SyncResponse{
+			parseStream.Send(&proto.SyncResponse{
 				Result: &proto.SyncResponse_Todo{
-					Todo: &proto.Todo{Id: action.Update.Id, Text: action.Update.Text, Done: action.Update.Done},
+					Todo: &proto.Todo{Id: parseAction.Update.Id, Text: parseAction.Update.Text, Done: parseAction.Update.Done},
 				},
 			})
 		case *proto.SyncRequest_Delete:
-			stream.Send(&proto.SyncResponse{
+			parseStream.Send(&proto.SyncResponse{
 				Result: &proto.SyncResponse_Error{Error: "deleted"},
 			})
 		}
@@ -109,788 +109,788 @@ func (s *mockTodoService) SyncTodos(stream proto.TodoService_SyncTodosServer) er
 }
 
 // TestIntegration_FullRoundtrip tests a complete client-server roundtrip
-func TestIntegration_FullRoundtrip(t *testing.T) {
+func TestIntegration_FullRoundtrip(parseT *testing.T) {
 	// Create gRPC server with mock service
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	// Create bridge handler
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
 	// Start HTTP test server
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
 	// Convert http:// to ws://
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
 	// Create gRPC client using bridge bridge.DialOption
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
 	// Create client
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
 	// Test CreateTodo
-	createResp, err := client.CreateTodo(ctx, &proto.CreateTodoRequest{
+	parseCreateResp, parseErr := parseClient.CreateTodo(parseCtx, &proto.CreateTodoRequest{
 		Text: "Integration test todo",
 	})
-	if err != nil {
-		t.Fatalf("CreateTodo failed: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("CreateTodo failed: %v", parseErr)
 	}
 
-	if createResp.GetTodo().GetId() != "test-123" {
-		t.Errorf("Expected ID 'test-123', got '%s'", createResp.GetTodo().GetId())
+	if parseCreateResp.GetTodo().GetId() != "test-123" {
+		parseT.Errorf("Expected ID 'test-123', got '%s'", parseCreateResp.GetTodo().GetId())
 	}
 
-	if createResp.GetTodo().GetText() != "Integration test todo" {
-		t.Errorf("Expected text 'Integration test todo', got '%s'", createResp.GetTodo().GetText())
+	if parseCreateResp.GetTodo().GetText() != "Integration test todo" {
+		parseT.Errorf("Expected text 'Integration test todo', got '%s'", parseCreateResp.GetTodo().GetText())
 	}
 
 	// Test ListTodos
-	listResp, err := client.ListTodos(ctx, &proto.ListTodosRequest{})
-	if err != nil {
-		t.Fatalf("ListTodos failed: %v", err)
+	parseListResp, parseErr := parseClient.ListTodos(parseCtx, &proto.ListTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("ListTodos failed: %v", parseErr)
 	}
 
-	if len(listResp.GetTodos()) != 1 {
-		t.Errorf("Expected 1 todo, got %d", len(listResp.GetTodos()))
+	if len(parseListResp.GetTodos()) != 1 {
+		parseT.Errorf("Expected 1 todo, got %d", len(parseListResp.GetTodos()))
 	}
 }
 
 // TestIntegration_LifecycleHooks tests that hooks are called
-func TestIntegration_LifecycleHooks(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_LifecycleHooks(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
-	var connectCalled, disconnectCalled bool
+	var isConnectCalled, isDisconnectCalled bool
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
-		OnConnect: func(r *http.Request) {
-			connectCalled = true
+		GRPCServer: parseGrpcServer,
+		OnConnect: func(parseR *http.Request) {
+			isConnectCalled = true
 		},
-		OnDisconnect: func(r *http.Request) {
-			disconnectCalled = true
+		OnDisconnect: func(parseR2 *http.Request) {
+			isDisconnectCalled = true
 		},
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
 
-	client := proto.NewTodoServiceClient(conn)
-	_, _ = client.ListTodos(ctx, &proto.ListTodosRequest{})
+	parseClient := proto.NewTodoServiceClient(parseConn)
+	_, _ = parseClient.ListTodos(parseCtx, &proto.ListTodosRequest{})
 
-	conn.Close()
+	parseConn.Close()
 
 	// Give time for disconnect hook
 	time.Sleep(100 * time.Millisecond)
 
-	if !connectCalled {
-		t.Error("OnConnect hook was not called")
+	if !isConnectCalled {
+		parseT.Error("OnConnect hook was not called")
 	}
 
-	if !disconnectCalled {
-		t.Error("OnDisconnect hook was not called")
+	if !isDisconnectCalled {
+		parseT.Error("OnDisconnect hook was not called")
 	}
 }
 
 // TestIntegration_CustomBufferSizes tests with custom buffer sizes
-func TestIntegration_CustomBufferSizes(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_CustomBufferSizes(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer:      grpcServer,
+		GRPCServer:      parseGrpcServer,
 		ReadBufferSize:  8192,
 		WriteBufferSize: 8192,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
-	_, err = client.CreateTodo(ctx, &proto.CreateTodoRequest{Text: "Test"})
-	if err != nil {
-		t.Fatalf("CreateTodo failed: %v", err)
+	parseClient := proto.NewTodoServiceClient(parseConn)
+	_, parseErr = parseClient.CreateTodo(parseCtx, &proto.CreateTodoRequest{Text: "Test"})
+	if parseErr != nil {
+		parseT.Fatalf("CreateTodo failed: %v", parseErr)
 	}
 }
 
 // TestServe_WithListener tests the Serve convenience function
-func TestServe_WithListener(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestServe_WithListener(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	// Create listener
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
+	parseListener, parseErr := net.Listen("tcp", "127.0.0.1:0")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to create listener: %v", parseErr)
 	}
-	defer listener.Close()
+	defer parseListener.Close()
 
 	// Start server in background
 	go func() {
-		_ = helpers.Serve(listener, grpcServer)
+		_ = helpers.Serve(parseListener, parseGrpcServer)
 	}()
 
 	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
 
 	// Connect to it
-	addr := listener.Addr().String()
-	wsURL := "ws://" + addr
+	parseAddr := parseListener.Addr().String()
+	parseWsURL := "ws://" + parseAddr
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		addr,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseAddr,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
-	resp, err := client.ListTodos(ctx, &proto.ListTodosRequest{})
-	if err != nil {
-		t.Fatalf("ListTodos failed: %v", err)
+	parseClient := proto.NewTodoServiceClient(parseConn)
+	parseResp, parseErr := parseClient.ListTodos(parseCtx, &proto.ListTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("ListTodos failed: %v", parseErr)
 	}
 
-	if len(resp.GetTodos()) == 0 {
-		t.Error("Expected at least one todo")
+	if len(parseResp.GetTodos()) == 0 {
+		parseT.Error("Expected at least one todo")
 	}
 }
 
 // TestIntegration_MultipleRequests tests multiple sequential requests
-func TestIntegration_MultipleRequests(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_MultipleRequests(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
 	// Make multiple requests over the same connection
-	for i := 0; i < 5; i++ {
-		_, err := client.ListTodos(ctx, &proto.ListTodosRequest{})
-		if err != nil {
-			t.Fatalf("Request %d failed: %v", i, err)
+	for parseI := 0; parseI < 5; parseI++ {
+		_, parseErr2 := parseClient.ListTodos(parseCtx, &proto.ListTodosRequest{})
+		if parseErr2 != nil {
+			parseT.Fatalf("Request %d failed: %v", parseI, parseErr2)
 		}
 	}
 }
 
 // TestIntegration_OriginCheck tests origin validation
-func TestIntegration_OriginCheck(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_OriginCheck(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
-		CheckOrigin: func(r *http.Request) bool {
+		GRPCServer: parseGrpcServer,
+		CheckOrigin: func(parseR *http.Request) bool {
 			// Reject all origins
 			return false
 		},
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	// Should fail due to origin check
-	_, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	_, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 
 	// We expect a connection error due to rejected origin
-	if err == nil {
-		t.Error("Expected error due to origin rejection, got nil")
+	if parseErr == nil {
+		parseT.Error("Expected error due to origin rejection, got nil")
 	}
 }
 
 // TestIntegration_ServerStreaming tests server-to-client streaming over WebSocket
-func TestIntegration_ServerStreaming(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_ServerStreaming(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	stream, err := client.StreamTodos(ctx, &proto.StreamTodosRequest{})
-	if err != nil {
-		t.Fatalf("StreamTodos failed: %v", err)
+	parseStream, parseErr := parseClient.StreamTodos(parseCtx, &proto.StreamTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("StreamTodos failed: %v", parseErr)
 	}
 
-	receivedTodos := []*proto.Todo{}
+	parseReceivedTodos := []*proto.Todo{}
 	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if err.Error() == "EOF" {
+		parseResp, parseErr2 := parseStream.Recv()
+		if parseErr2 != nil {
+			if parseErr2.Error() == "EOF" {
 				break
 			}
-			t.Fatalf("Failed to receive: %v", err)
+			parseT.Fatalf("Failed to receive: %v", parseErr2)
 		}
-		receivedTodos = append(receivedTodos, resp.Todo)
+		parseReceivedTodos = append(parseReceivedTodos, parseResp.Todo)
 	}
 
-	if len(receivedTodos) != 3 {
-		t.Errorf("Expected 3 streamed todos, got %d", len(receivedTodos))
+	if len(parseReceivedTodos) != 3 {
+		parseT.Errorf("Expected 3 streamed todos, got %d", len(parseReceivedTodos))
 	}
 
-	if receivedTodos[0].Text != "First Todo" {
-		t.Errorf("Expected 'First Todo', got '%s'", receivedTodos[0].Text)
+	if parseReceivedTodos[0].Text != "First Todo" {
+		parseT.Errorf("Expected 'First Todo', got '%s'", parseReceivedTodos[0].Text)
 	}
 }
 
 // TestIntegration_ClientStreaming tests client-to-server streaming over WebSocket
-func TestIntegration_ClientStreaming(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_ClientStreaming(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	stream, err := client.BulkCreateTodos(ctx)
-	if err != nil {
-		t.Fatalf("BulkCreateTodos failed: %v", err)
+	parseStream, parseErr := parseClient.BulkCreateTodos(parseCtx)
+	if parseErr != nil {
+		parseT.Fatalf("BulkCreateTodos failed: %v", parseErr)
 	}
 
 	// Send multiple todos
-	todos := []string{"Todo 1", "Todo 2", "Todo 3", "Todo 4", "Todo 5"}
-	for _, text := range todos {
-		if err := stream.Send(&proto.BulkCreateRequest{Text: text}); err != nil {
-			t.Fatalf("Failed to send: %v", err)
+	parseTodos := []string{"Todo 1", "Todo 2", "Todo 3", "Todo 4", "Todo 5"}
+	for _, parseText := range parseTodos {
+		if parseErr2 := parseStream.Send(&proto.BulkCreateRequest{Text: parseText}); parseErr2 != nil {
+			parseT.Fatalf("Failed to send: %v", parseErr2)
 		}
 	}
 
-	resp, err := stream.CloseAndRecv()
-	if err != nil {
-		t.Fatalf("Failed to close and receive: %v", err)
+	parseResp, parseErr := parseStream.CloseAndRecv()
+	if parseErr != nil {
+		parseT.Fatalf("Failed to close and receive: %v", parseErr)
 	}
 
-	if resp.CreatedCount != int32(len(todos)) {
-		t.Errorf("Expected %d created todos, got %d", len(todos), resp.CreatedCount)
+	if parseResp.CreatedCount != int32(len(parseTodos)) {
+		parseT.Errorf("Expected %d created todos, got %d", len(parseTodos), parseResp.CreatedCount)
 	}
 }
 
 // TestIntegration_BidirectionalStreaming tests full-duplex streaming over WebSocket
-func TestIntegration_BidirectionalStreaming(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_BidirectionalStreaming(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	stream, err := client.SyncTodos(ctx)
-	if err != nil {
-		t.Fatalf("SyncTodos failed: %v", err)
+	parseStream, parseErr := parseClient.SyncTodos(parseCtx)
+	if parseErr != nil {
+		parseT.Fatalf("SyncTodos failed: %v", parseErr)
 	}
 
 	// Test bidirectional streaming by sending and receiving concurrently
-	done := make(chan bool)
-	responses := []*proto.SyncResponse{}
+	parseDone := make(chan bool)
+	parseResponses := []*proto.SyncResponse{}
 
 	// Receiver goroutine
 	go func() {
 		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				done <- true
+			parseResp, parseErr2 := parseStream.Recv()
+			if parseErr2 != nil {
+				parseDone <- true
 				return
 			}
-			responses = append(responses, resp)
+			parseResponses = append(parseResponses, parseResp)
 		}
 	}()
 
 	// Send multiple operations
-	stream.Send(&proto.SyncRequest{
+	parseStream.Send(&proto.SyncRequest{
 		Action: &proto.SyncRequest_Create{
 			Create: &proto.CreateTodoRequest{Text: "Bidirectional test"},
 		},
 	})
 
-	stream.Send(&proto.SyncRequest{
+	parseStream.Send(&proto.SyncRequest{
 		Action: &proto.SyncRequest_Update{
 			Update: &proto.UpdateTodoRequest{Id: "123", Text: "Updated", Done: true},
 		},
 	})
 
-	stream.Send(&proto.SyncRequest{
+	parseStream.Send(&proto.SyncRequest{
 		Action: &proto.SyncRequest_Delete{
 			Delete: &proto.DeleteTodoRequest{Id: "456"},
 		},
 	})
 
-	stream.CloseSend()
-	<-done
+	parseStream.CloseSend()
+	<-parseDone
 
-	if len(responses) != 3 {
-		t.Errorf("Expected 3 responses, got %d", len(responses))
+	if len(parseResponses) != 3 {
+		parseT.Errorf("Expected 3 responses, got %d", len(parseResponses))
 	}
 
 	// Verify create response
-	if responses[0].GetTodo() == nil {
-		t.Error("Expected todo in first response")
+	if parseResponses[0].GetTodo() == nil {
+		parseT.Error("Expected todo in first response")
 	}
 }
 
 // TestIntegration_Metadata tests that gRPC metadata (headers) are preserved
-func TestIntegration_Metadata(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_Metadata(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
 	// Send metadata with request
-	md := metadata.Pairs(
+	parseMd := metadata.Pairs(
 		"authorization", "Bearer test-token",
 		"custom-header", "custom-value",
 	)
-	ctx = metadata.NewOutgoingContext(ctx, md)
+	parseCtx = metadata.NewOutgoingContext(parseCtx, parseMd)
 
-	var header metadata.MD
-	_, err = client.CreateTodo(ctx, &proto.CreateTodoRequest{Text: "Test"}, grpc.Header(&header))
-	if err != nil {
-		t.Fatalf("CreateTodo with metadata failed: %v", err)
+	var parseHeader metadata.MD
+	_, parseErr = parseClient.CreateTodo(parseCtx, &proto.CreateTodoRequest{Text: "Test"}, grpc.Header(&parseHeader))
+	if parseErr != nil {
+		parseT.Fatalf("CreateTodo with metadata failed: %v", parseErr)
 	}
 
 	// Note: This tests that metadata doesn't break the connection
 	// Full metadata round-trip verification would require server-side inspection
-	t.Log("Metadata test passed - request succeeded with headers")
+	parseT.Log("Metadata test passed - request succeeded with headers")
 }
 
 // TestIntegration_Trailers tests that gRPC trailers are preserved
-func TestIntegration_Trailers(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_Trailers(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	var trailer metadata.MD
-	_, err = client.ListTodos(ctx, &proto.ListTodosRequest{}, grpc.Trailer(&trailer))
-	if err != nil {
-		t.Fatalf("ListTodos with trailer failed: %v", err)
+	var parseTrailer metadata.MD
+	_, parseErr = parseClient.ListTodos(parseCtx, &proto.ListTodosRequest{}, grpc.Trailer(&parseTrailer))
+	if parseErr != nil {
+		parseT.Fatalf("ListTodos with trailer failed: %v", parseErr)
 	}
 
 	// Note: This tests that trailer handling doesn't break the connection
-	t.Log("Trailer test passed - request succeeded with trailer capture")
+	parseT.Log("Trailer test passed - request succeeded with trailer capture")
 }
 
 // TestIntegration_Cancellation tests context cancellation propagation
-func TestIntegration_Cancellation(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_Cancellation(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
 	// Start a server streaming call
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	stream, err := client.StreamTodos(streamCtx, &proto.StreamTodosRequest{})
-	if err != nil {
-		t.Fatalf("StreamTodos failed: %v", err)
+	parseStreamCtx, parseStreamCancel := context.WithCancel(parseCtx)
+	parseStream, parseErr := parseClient.StreamTodos(parseStreamCtx, &proto.StreamTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("StreamTodos failed: %v", parseErr)
 	}
 
 	// Receive one message
-	_, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("First recv failed: %v", err)
+	_, parseErr = parseStream.Recv()
+	if parseErr != nil {
+		parseT.Fatalf("First recv failed: %v", parseErr)
 	}
 
 	// Cancel the context
-	streamCancel()
+	parseStreamCancel()
 
 	// Next recv should fail with context canceled
-	_, err = stream.Recv()
-	if err == nil {
-		t.Error("Expected error after context cancellation, got nil")
+	_, parseErr = parseStream.Recv()
+	if parseErr == nil {
+		parseT.Error("Expected error after context cancellation, got nil")
 	}
 
-	if err != nil && err != context.Canceled && !isContextCanceledError(err) {
-		t.Logf("Got error after cancellation: %v (type: %T)", err, err)
+	if parseErr != nil && parseErr != context.Canceled && !isContextCanceledError(parseErr) {
+		parseT.Logf("Got error after cancellation: %v (type: %T)", parseErr, parseErr)
 	}
 }
 
 // Helper to check for context cancellation errors
-func isContextCanceledError(err error) bool {
-	if err == context.Canceled {
+func isContextCanceledError(parseErr error) bool {
+	if parseErr == context.Canceled {
 		return true
 	}
-	return err.Error() == "context canceled" || err.Error() == "rpc error: code = Canceled desc = context canceled"
+	return parseErr.Error() == "context canceled" || parseErr.Error() == "rpc error: code = Canceled desc = context canceled"
 }
 
 // TestIntegration_Backpressure tests flow control in streaming
-func TestIntegration_Backpressure(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_Backpressure(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	handler := helpers.ServeHandler(helpers.ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		ctx,
-		server.URL,
-		bridge.DialOption(wsURL),
+	parseConn, parseErr := grpc.DialContext(
+		parseCtx,
+		parseServer.URL,
+		bridge.DialOption(parseWsURL),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		t.Fatalf("Failed to dial: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("Failed to dial: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
 	// Test backpressure with slow receiver
-	stream, err := client.StreamTodos(ctx, &proto.StreamTodosRequest{})
-	if err != nil {
-		t.Fatalf("StreamTodos failed: %v", err)
+	parseStream, parseErr := parseClient.StreamTodos(parseCtx, &proto.StreamTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("StreamTodos failed: %v", parseErr)
 	}
 
-	receivedCount := 0
+	parseReceivedCount := 0
 	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
+		_, parseErr2 := parseStream.Recv()
+		if parseErr2 == io.EOF {
 			break
 		}
-		if err != nil {
-			t.Fatalf("Recv failed: %v", err)
+		if parseErr2 != nil {
+			parseT.Fatalf("Recv failed: %v", parseErr2)
 		}
-		receivedCount++
+		parseReceivedCount++
 
 		// Simulate slow consumer
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	if receivedCount != 3 {
-		t.Errorf("Expected 3 messages with backpressure, got %d", receivedCount)
+	if parseReceivedCount != 3 {
+		parseT.Errorf("Expected 3 messages with backpressure, got %d", parseReceivedCount)
 	}
 
-	t.Log("Backpressure test passed - slow receiver handled correctly")
+	parseT.Log("Backpressure test passed - slow receiver handled correctly")
 }
 
 // TestIntegration_GrpcTunnel_ServerStreaming tests new grpctunnel API with server streaming
-func TestIntegration_GrpcTunnel_ServerStreaming(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_GrpcTunnel_ServerStreaming(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
 	// Use new grpctunnel.Wrap API
-	handler := grpctunnel.Wrap(grpcServer)
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	handler := grpctunnel.Wrap(parseGrpcServer)
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// Use new grpctunnel.Dial API
-	conn, err := grpctunnel.DialContext(ctx, wsURL,
+	parseConn, parseErr := grpctunnel.DialContext(parseCtx, parseWsURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
-	if err != nil {
-		t.Fatalf("grpctunnel.Dial failed: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("grpctunnel.Dial failed: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
-	stream, err := client.StreamTodos(ctx, &proto.StreamTodosRequest{})
-	if err != nil {
-		t.Fatalf("StreamTodos failed: %v", err)
+	parseClient := proto.NewTodoServiceClient(parseConn)
+	parseStream, parseErr := parseClient.StreamTodos(parseCtx, &proto.StreamTodosRequest{})
+	if parseErr != nil {
+		parseT.Fatalf("StreamTodos failed: %v", parseErr)
 	}
 
-	count := 0
+	parseCount := 0
 	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
+		_, parseErr2 := parseStream.Recv()
+		if parseErr2 == io.EOF {
 			break
 		}
-		if err != nil {
-			t.Fatalf("Recv failed: %v", err)
+		if parseErr2 != nil {
+			parseT.Fatalf("Recv failed: %v", parseErr2)
 		}
-		count++
+		parseCount++
 	}
 
-	if count != 3 {
-		t.Errorf("Expected 3 todos, got %d", count)
+	if parseCount != 3 {
+		parseT.Errorf("Expected 3 todos, got %d", parseCount)
 	}
 }
 
 // TestIntegration_GrpcTunnel_Unary tests new grpctunnel API with unary calls
-func TestIntegration_GrpcTunnel_Unary(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	proto.RegisterTodoServiceServer(grpcServer, &mockTodoService{})
-	defer grpcServer.Stop()
+func TestIntegration_GrpcTunnel_Unary(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockTodoService{})
+	defer parseGrpcServer.Stop()
 
-	handler := grpctunnel.Wrap(grpcServer)
-	server := httptest.NewServer(handler)
-	defer server.Close()
+	handler := grpctunnel.Wrap(parseGrpcServer)
+	parseServer := httptest.NewServer(handler)
+	defer parseServer.Close()
 
-	wsURL := "ws" + server.URL[4:]
+	parseWsURL := "ws" + parseServer.URL[4:]
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpctunnel.Dial(wsURL,
+	parseConn, parseErr := grpctunnel.Dial(parseWsURL,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
-	if err != nil {
-		t.Fatalf("grpctunnel.Dial failed: %v", err)
+	if parseErr != nil {
+		parseT.Fatalf("grpctunnel.Dial failed: %v", parseErr)
 	}
-	defer conn.Close()
+	defer parseConn.Close()
 
-	client := proto.NewTodoServiceClient(conn)
+	parseClient := proto.NewTodoServiceClient(parseConn)
 
-	resp, err := client.CreateTodo(ctx, &proto.CreateTodoRequest{Text: "Test with grpctunnel"})
-	if err != nil {
-		t.Fatalf("CreateTodo failed: %v", err)
+	parseResp, parseErr := parseClient.CreateTodo(parseCtx, &proto.CreateTodoRequest{Text: "Test with grpctunnel"})
+	if parseErr != nil {
+		parseT.Fatalf("CreateTodo failed: %v", parseErr)
 	}
 
-	if resp.GetTodo().GetText() != "Test with grpctunnel" {
-		t.Errorf("Expected 'Test with grpctunnel', got '%s'", resp.GetTodo().GetText())
+	if parseResp.GetTodo().GetText() != "Test with grpctunnel" {
+		parseT.Errorf("Expected 'Test with grpctunnel', got '%s'", parseResp.GetTodo().GetText())
 	}
 }

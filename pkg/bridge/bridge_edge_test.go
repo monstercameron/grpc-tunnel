@@ -8,252 +8,252 @@ import (
 )
 
 // TestWebSocketConn_ZeroLengthMessage tests handling of empty messages
-func TestWebSocketConn_ZeroLengthMessage(t *testing.T) {
-	mock := &mockWebSocket{
+func TestWebSocketConn_ZeroLengthMessage(parseT *testing.T) {
+	parseMock := &mockWebSocket{
 		readMessages: [][]byte{[]byte("")},
 	}
 
-	msgType, data, err := mock.ReadMessage()
-	if err != nil {
-		t.Logf("ReadMessage error: %v", err)
+	parseMsgType, parseData, parseErr := parseMock.ReadMessage()
+	if parseErr != nil {
+		parseT.Logf("ReadMessage error: %v", parseErr)
 	}
-	if len(data) != 0 {
-		t.Errorf("Expected empty message, got %d bytes", len(data))
+	if len(parseData) != 0 {
+		parseT.Errorf("Expected empty message, got %d bytes", len(parseData))
 	}
-	_ = msgType
+	_ = parseMsgType
 }
 
 // TestWebSocketConn_WriteZeroLength tests writing zero bytes
-func TestWebSocketConn_WriteZeroLength(t *testing.T) {
-	mock := &mockWebSocket{}
+func TestWebSocketConn_WriteZeroLength(parseT *testing.T) {
+	parseMock := &mockWebSocket{}
 
-	err := mock.WriteMessage(1, []byte{})
-	if err != nil {
-		t.Errorf("WriteMessage([]byte{}) returned error: %v", err)
+	parseErr := parseMock.WriteMessage(1, []byte{})
+	if parseErr != nil {
+		parseT.Errorf("WriteMessage([]byte{}) returned error: %v", parseErr)
 	}
 
-	if len(mock.writeMessages) != 1 {
-		t.Errorf("Expected 1 write, got %d", len(mock.writeMessages))
+	if len(parseMock.writeMessages) != 1 {
+		parseT.Errorf("Expected 1 write, got %d", len(parseMock.writeMessages))
 	}
-	if len(mock.writeMessages[0]) != 0 {
-		t.Errorf("Expected empty write, got %d bytes", len(mock.writeMessages[0]))
+	if len(parseMock.writeMessages[0]) != 0 {
+		parseT.Errorf("Expected empty write, got %d bytes", len(parseMock.writeMessages[0]))
 	}
 }
 
 // TestMockWebSocket_ReadError tests error propagation
-func TestMockWebSocket_ReadError(t *testing.T) {
-	expectedErr := errors.New("read error")
-	mock := &mockWebSocket{
-		readErr: expectedErr,
+func TestMockWebSocket_ReadError(parseT *testing.T) {
+	parseExpectedErr := errors.New("read error")
+	parseMock := &mockWebSocket{
+		readErr: parseExpectedErr,
 	}
 
-	_, _, err := mock.ReadMessage()
-	if err != expectedErr {
-		t.Errorf("Expected error %v, got %v", expectedErr, err)
+	_, _, parseErr := parseMock.ReadMessage()
+	if parseErr != parseExpectedErr {
+		parseT.Errorf("Expected error %v, got %v", parseExpectedErr, parseErr)
 	}
 }
 
 // TestMockWebSocket_WriteError tests write error propagation
-func TestMockWebSocket_WriteError(t *testing.T) {
-	expectedErr := errors.New("write error")
-	mock := &mockWebSocket{
-		writeErr: expectedErr,
+func TestMockWebSocket_WriteError(parseT *testing.T) {
+	parseExpectedErr := errors.New("write error")
+	parseMock := &mockWebSocket{
+		writeErr: parseExpectedErr,
 	}
 
-	err := mock.WriteMessage(1, []byte("test"))
-	if err != expectedErr {
-		t.Errorf("Expected error %v, got %v", expectedErr, err)
+	parseErr := parseMock.WriteMessage(1, []byte("test"))
+	if parseErr != parseExpectedErr {
+		parseT.Errorf("Expected error %v, got %v", parseExpectedErr, parseErr)
 	}
 }
 
 // TestMockWebSocket_LargeMessage tests handling of large messages
-func TestMockWebSocket_LargeMessage(t *testing.T) {
+func TestMockWebSocket_LargeMessage(parseT *testing.T) {
 	// 1MB message
-	largeData := make([]byte, 1024*1024)
-	for i := range largeData {
-		largeData[i] = byte(i % 256)
+	parseLargeData := make([]byte, 1024*1024)
+	for parseI := range parseLargeData {
+		parseLargeData[parseI] = byte(parseI % 256)
 	}
 
-	mock := &mockWebSocket{
-		readMessages: [][]byte{largeData},
+	parseMock := &mockWebSocket{
+		readMessages: [][]byte{parseLargeData},
 	}
 
-	_, data, err := mock.ReadMessage()
-	if err != nil {
-		t.Fatalf("ReadMessage error: %v", err)
+	_, parseData, parseErr := parseMock.ReadMessage()
+	if parseErr != nil {
+		parseT.Fatalf("ReadMessage error: %v", parseErr)
 	}
 
-	if !bytes.Equal(data, largeData) {
-		t.Errorf("Data mismatch for large message")
+	if !bytes.Equal(parseData, parseLargeData) {
+		parseT.Errorf("Data mismatch for large message")
 	}
 }
 
 // TestMockWebSocket_MultipleMessages tests sequential message reading
-func TestMockWebSocket_MultipleMessages(t *testing.T) {
-	messages := [][]byte{
+func TestMockWebSocket_MultipleMessages(parseT *testing.T) {
+	parseMessages := [][]byte{
 		[]byte("message1"),
 		[]byte("message2"),
 		[]byte("message3"),
 	}
 
-	mock := &mockWebSocket{
-		readMessages: messages,
+	parseMock := &mockWebSocket{
+		readMessages: parseMessages,
 	}
 
-	for i, expected := range messages {
-		_, data, err := mock.ReadMessage()
-		if err != nil {
-			t.Fatalf("ReadMessage %d error: %v", i, err)
+	for parseI, parseExpected := range parseMessages {
+		_, parseData, parseErr := parseMock.ReadMessage()
+		if parseErr != nil {
+			parseT.Fatalf("ReadMessage %d error: %v", parseI, parseErr)
 		}
-		if !bytes.Equal(data, expected) {
-			t.Errorf("Message %d: got %q, want %q", i, data, expected)
+		if !bytes.Equal(parseData, parseExpected) {
+			parseT.Errorf("Message %d: got %q, want %q", parseI, parseData, parseExpected)
 		}
 	}
 
 	// Next read should give EOF
-	_, _, err := mock.ReadMessage()
-	if err != io.EOF {
-		t.Errorf("Expected EOF after all messages, got %v", err)
+	_, _, parseErr2 := parseMock.ReadMessage()
+	if parseErr2 != io.EOF {
+		parseT.Errorf("Expected EOF after all messages, got %v", parseErr2)
 	}
 }
 
 // TestMockWebSocket_BinaryData tests binary data with null bytes
-func TestMockWebSocket_BinaryData(t *testing.T) {
-	binaryData := []byte{0x00, 0x01, 0x02, 0xFF, 0xFE, 0x00, 0x00, 0xFF}
+func TestMockWebSocket_BinaryData(parseT *testing.T) {
+	parseBinaryData := []byte{0x00, 0x01, 0x02, 0xFF, 0xFE, 0x00, 0x00, 0xFF}
 
-	mock := &mockWebSocket{
-		readMessages: [][]byte{binaryData},
+	parseMock := &mockWebSocket{
+		readMessages: [][]byte{parseBinaryData},
 	}
 
-	_, data, err := mock.ReadMessage()
-	if err != nil {
-		t.Fatalf("ReadMessage error: %v", err)
+	_, parseData, parseErr := parseMock.ReadMessage()
+	if parseErr != nil {
+		parseT.Fatalf("ReadMessage error: %v", parseErr)
 	}
 
-	if !bytes.Equal(data, binaryData) {
-		t.Errorf("Binary data mismatch")
+	if !bytes.Equal(parseData, parseBinaryData) {
+		parseT.Errorf("Binary data mismatch")
 	}
 }
 
 // TestMockWebSocket_Close tests close functionality
-func TestMockWebSocket_Close(t *testing.T) {
-	mock := &mockWebSocket{}
+func TestMockWebSocket_Close(parseT *testing.T) {
+	parseMock := &mockWebSocket{}
 
-	if mock.closed {
-		t.Error("Mock should not be closed initially")
+	if parseMock.closed {
+		parseT.Error("Mock should not be closed initially")
 	}
 
-	err := mock.Close()
-	if err != nil {
-		t.Errorf("Close() returned error: %v", err)
+	parseErr := parseMock.Close()
+	if parseErr != nil {
+		parseT.Errorf("Close() returned error: %v", parseErr)
 	}
 
-	if !mock.closed {
-		t.Error("Mock should be closed after Close()")
+	if !parseMock.closed {
+		parseT.Error("Mock should be closed after Close()")
 	}
 
 	// Multiple closes should be OK
-	err = mock.Close()
-	if err != nil {
-		t.Errorf("Second Close() returned error: %v", err)
+	parseErr = parseMock.Close()
+	if parseErr != nil {
+		parseT.Errorf("Second Close() returned error: %v", parseErr)
 	}
 }
 
 // TestMockWebSocket_Addresses tests address methods
-func TestMockWebSocket_Addresses(t *testing.T) {
-	mock := &mockWebSocket{}
+func TestMockWebSocket_Addresses(parseT *testing.T) {
+	parseMock := &mockWebSocket{}
 
-	local := mock.LocalAddr()
-	if local == nil {
-		t.Error("LocalAddr() returned nil")
+	parseLocal := parseMock.LocalAddr()
+	if parseLocal == nil {
+		parseT.Error("LocalAddr() returned nil")
 	}
 
-	remote := mock.RemoteAddr()
-	if remote == nil {
-		t.Error("RemoteAddr() returned nil")
+	parseRemote := parseMock.RemoteAddr()
+	if parseRemote == nil {
+		parseT.Error("RemoteAddr() returned nil")
 	}
 
-	if local.String() == remote.String() {
-		t.Error("LocalAddr and RemoteAddr should differ")
+	if parseLocal.String() == parseRemote.String() {
+		parseT.Error("LocalAddr and RemoteAddr should differ")
 	}
 }
 
 // TestMockWebSocket_WriteMultiple tests multiple writes
-func TestMockWebSocket_WriteMultiple(t *testing.T) {
-	mock := &mockWebSocket{}
+func TestMockWebSocket_WriteMultiple(parseT *testing.T) {
+	parseMock := &mockWebSocket{}
 
-	writes := [][]byte{
+	parseWrites := [][]byte{
 		[]byte("first"),
 		[]byte("second"),
 		[]byte("third"),
 	}
 
-	for _, data := range writes {
-		err := mock.WriteMessage(1, data)
-		if err != nil {
-			t.Fatalf("WriteMessage error: %v", err)
+	for _, parseData := range parseWrites {
+		parseErr := parseMock.WriteMessage(1, parseData)
+		if parseErr != nil {
+			parseT.Fatalf("WriteMessage error: %v", parseErr)
 		}
 	}
 
-	if len(mock.writeMessages) != len(writes) {
-		t.Errorf("Expected %d writes, got %d", len(writes), len(mock.writeMessages))
+	if len(parseMock.writeMessages) != len(parseWrites) {
+		parseT.Errorf("Expected %d writes, got %d", len(parseWrites), len(parseMock.writeMessages))
 	}
 
-	for i, expected := range writes {
-		if !bytes.Equal(mock.writeMessages[i], expected) {
-			t.Errorf("Write %d: got %q, want %q", i, mock.writeMessages[i], expected)
+	for parseI, parseExpected := range parseWrites {
+		if !bytes.Equal(parseMock.writeMessages[parseI], parseExpected) {
+			parseT.Errorf("Write %d: got %q, want %q", parseI, parseMock.writeMessages[parseI], parseExpected)
 		}
 	}
 }
 
 // TestMockWebSocket_EmptyMessageList tests reading with no messages
-func TestMockWebSocket_EmptyMessageList(t *testing.T) {
-	mock := &mockWebSocket{
+func TestMockWebSocket_EmptyMessageList(parseT *testing.T) {
+	parseMock := &mockWebSocket{
 		readMessages: [][]byte{},
 	}
 
-	_, _, err := mock.ReadMessage()
-	if err != io.EOF {
-		t.Errorf("Expected EOF on empty message list, got %v", err)
+	_, _, parseErr := parseMock.ReadMessage()
+	if parseErr != io.EOF {
+		parseT.Errorf("Expected EOF on empty message list, got %v", parseErr)
 	}
 }
 
 // Edge case documentation tests
 
 // TestEdgeCase_MaxMessageSize documents maximum message size handling
-func TestEdgeCase_MaxMessageSize(t *testing.T) {
-	sizes := []int{
+func TestEdgeCase_MaxMessageSize(parseT *testing.T) {
+	parseSizes := []int{
 		1024,             // 1KB
 		65536,            // 64KB
 		1024 * 1024,      // 1MB
 		10 * 1024 * 1024, // 10MB
 	}
 
-	for _, size := range sizes {
-		t.Logf("Edge case: Message size %d bytes should be tested in integration", size)
+	for _, parseSize := range parseSizes {
+		parseT.Logf("Edge case: Message size %d bytes should be tested in integration", parseSize)
 	}
 }
 
 // TestEdgeCase_ConcurrentOperations documents concurrency scenarios
-func TestEdgeCase_ConcurrentOperations(t *testing.T) {
-	t.Log("Edge case: Concurrent Read and Write operations should be tested")
-	t.Log("Edge case: Multiple goroutines reading simultaneously")
-	t.Log("Edge case: Multiple goroutines writing simultaneously")
-	t.Log("Edge case: Close during active read/write")
+func TestEdgeCase_ConcurrentOperations(parseT *testing.T) {
+	parseT.Log("Edge case: Concurrent Read and Write operations should be tested")
+	parseT.Log("Edge case: Multiple goroutines reading simultaneously")
+	parseT.Log("Edge case: Multiple goroutines writing simultaneously")
+	parseT.Log("Edge case: Close during active read/write")
 }
 
 // TestEdgeCase_DeadlineScenarios documents deadline edge cases
-func TestEdgeCase_DeadlineScenarios(t *testing.T) {
-	t.Log("Edge case: Zero deadline (no timeout)")
-	t.Log("Edge case: Past deadline (immediate timeout)")
-	t.Log("Edge case: Deadline exactly at operation completion")
-	t.Log("Edge case: Very long deadline (years in future)")
+func TestEdgeCase_DeadlineScenarios(parseT *testing.T) {
+	parseT.Log("Edge case: Zero deadline (no timeout)")
+	parseT.Log("Edge case: Past deadline (immediate timeout)")
+	parseT.Log("Edge case: Deadline exactly at operation completion")
+	parseT.Log("Edge case: Very long deadline (years in future)")
 }
 
 // TestEdgeCase_BufferBoundaries documents buffer edge cases
-func TestEdgeCase_BufferBoundaries(t *testing.T) {
-	t.Log("Edge case: Read buffer exactly message size")
-	t.Log("Edge case: Read buffer smaller than message")
-	t.Log("Edge case: Read buffer much larger than message")
-	t.Log("Edge case: Single byte buffer reads")
+func TestEdgeCase_BufferBoundaries(parseT *testing.T) {
+	parseT.Log("Edge case: Read buffer exactly message size")
+	parseT.Log("Edge case: Read buffer smaller than message")
+	parseT.Log("Edge case: Read buffer much larger than message")
+	parseT.Log("Edge case: Single byte buffer reads")
 }

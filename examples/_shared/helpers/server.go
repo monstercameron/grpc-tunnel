@@ -46,50 +46,50 @@ type ServerConfig struct {
 //	    GRPCServer: grpcServer,
 //	}))
 //	http.ListenAndServe(":8080", nil)
-func ServeHandler(cfg ServerConfig) http.Handler {
+func ServeHandler(parseCfg ServerConfig) http.Handler {
 	// Set defaults
-	if cfg.ReadBufferSize == 0 {
-		cfg.ReadBufferSize = 4096
+	if parseCfg.ReadBufferSize == 0 {
+		parseCfg.ReadBufferSize = 4096
 	}
-	if cfg.WriteBufferSize == 0 {
-		cfg.WriteBufferSize = 4096
+	if parseCfg.WriteBufferSize == 0 {
+		parseCfg.WriteBufferSize = 4096
 	}
-	if cfg.CheckOrigin == nil {
-		cfg.CheckOrigin = func(r *http.Request) bool { return true }
-	}
-
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  cfg.ReadBufferSize,
-		WriteBufferSize: cfg.WriteBufferSize,
-		CheckOrigin:     cfg.CheckOrigin,
+	if parseCfg.CheckOrigin == nil {
+		parseCfg.CheckOrigin = func(parseR *http.Request) bool { return true }
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	parseUpgrader := websocket.Upgrader{
+		ReadBufferSize:  parseCfg.ReadBufferSize,
+		WriteBufferSize: parseCfg.WriteBufferSize,
+		CheckOrigin:     parseCfg.CheckOrigin,
+	}
+
+	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
 		// Upgrade to WebSocket
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
+		parseWs, parseErr := parseUpgrader.Upgrade(parseW, parseR2, nil)
+		if parseErr != nil {
 			return
 		}
-		defer ws.Close()
+		defer parseWs.Close()
 
 		// Lifecycle hooks
-		if cfg.OnConnect != nil {
-			cfg.OnConnect(r)
+		if parseCfg.OnConnect != nil {
+			parseCfg.OnConnect(parseR2)
 		}
 		defer func() {
-			if cfg.OnDisconnect != nil {
-				cfg.OnDisconnect(r)
+			if parseCfg.OnDisconnect != nil {
+				parseCfg.OnDisconnect(parseR2)
 			}
 		}()
 
 		// Wrap WebSocket as net.Conn
-		conn := bridge.NewWebSocketConn(ws)
-		defer conn.Close()
+		parseConn := bridge.NewWebSocketConn(parseWs)
+		defer parseConn.Close()
 
 		// Serve gRPC over HTTP/2 on the WebSocket connection
-		h2Server := &http2.Server{}
-		h2Server.ServeConn(conn, &http2.ServeConnOpts{
-			Handler: h2c.NewHandler(cfg.GRPCServer, h2Server),
+		parseH2Server := &http2.Server{}
+		parseH2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+			Handler: h2c.NewHandler(parseCfg.GRPCServer, parseH2Server),
 		})
 	})
 }
@@ -104,15 +104,15 @@ func ServeHandler(cfg ServerConfig) http.Handler {
 //
 //	lis, _ := net.Listen("tcp", ":8080")
 //	bridge.Serve(lis, grpcServer)
-func Serve(listener net.Listener, grpcServer *grpc.Server) error {
+func Serve(parseListener net.Listener, parseGrpcServer *grpc.Server) error {
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
-	server := &http.Server{
+	parseServer := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	return server.Serve(listener)
+	return parseServer.Serve(parseListener)
 }

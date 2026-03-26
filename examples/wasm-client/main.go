@@ -18,39 +18,39 @@ func main() {
 	log.Println("WASM: Starting new gRPC client...")
 
 	// Establish a gRPC connection via the WebSocket tunnel
-	dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	parseDialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	grpcConnection, dialError := grpc.DialContext(
-		dialContext,
+	parseGrpcConnection, parseDialError := grpc.DialContext(
+		parseDialContext,
 		"localhost:5000", // Target will be ignored, dialer handles connection
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		dialer.New("ws://localhost:5000/"), // Use our custom WASM dialer
 	)
-	if dialError != nil {
-		log.Fatalf("WASM: Failed to connect to gRPC server via WebSocket: %v", dialError)
+	if parseDialError != nil {
+		log.Fatalf("WASM: Failed to connect to gRPC server via WebSocket: %v", parseDialError)
 	}
 	defer func() {
-		if closeError := grpcConnection.Close(); closeError != nil {
-			log.Printf("WASM: Error closing gRPC connection: %v", closeError)
+		if parseCloseError := parseGrpcConnection.Close(); parseCloseError != nil {
+			log.Printf("WASM: Error closing gRPC connection: %v", parseCloseError)
 		}
 	}()
 
-	todoServiceClient := proto.NewTodoServiceClient(grpcConnection)
+	parseTodoServiceClient := proto.NewTodoServiceClient(parseGrpcConnection)
 
 	// Make a simple CreateTodo RPC call
-	createRequest := &proto.CreateTodoRequest{Text: "Learn gRPC-over-WebSocket"}
-	contextWithTimeout, contextCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer contextCancel()
+	parseCreateRequest := &proto.CreateTodoRequest{Text: "Learn gRPC-over-WebSocket"}
+	parseContextWithTimeout, parseContextCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer parseContextCancel()
 
-	createResponse, createError := todoServiceClient.CreateTodo(contextWithTimeout, createRequest)
-	if createError != nil {
-		log.Fatalf("WASM: Failed to create todo: %v", createError)
+	parseCreateResponse, parseCreateError := parseTodoServiceClient.CreateTodo(parseContextWithTimeout, parseCreateRequest)
+	if parseCreateError != nil {
+		log.Fatalf("WASM: Failed to create todo: %v", parseCreateError)
 	}
 	log.Printf("WASM: Created new todo: ID=%s, Text=%s, Done=%t",
-		createResponse.GetTodo().GetId(),
-		createResponse.GetTodo().GetText(),
-		createResponse.GetTodo().GetDone(),
+		parseCreateResponse.GetTodo().GetId(),
+		parseCreateResponse.GetTodo().GetText(),
+		parseCreateResponse.GetTodo().GetDone(),
 	)
 
 	// Keep the WASM runtime alive

@@ -15,7 +15,7 @@ func main() {
 		TargetAddress: "localhost:50051",
 	})
 
-	server := &http.Server{
+	parseServer := &http.Server{
 		Addr:         ":8080",
 		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
@@ -25,5 +25,5 @@ func main() {
 
 	log.Println("Bridge listening on :8080")
 	log.Println("Proxying to gRPC server at localhost:50051")
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(parseServer.ListenAndServe())
 }

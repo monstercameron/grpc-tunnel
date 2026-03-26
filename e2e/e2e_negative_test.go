@@ -13,85 +13,85 @@ import (
 )
 
 // TestServerUnavailable tests client behavior when server is not running
-func TestServerUnavailable(t *testing.T) {
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+func TestServerUnavailable(parseT *testing.T) {
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Build
-	t.Log("Building components...")
+	parseT.Log("Building components...")
 	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = projectRoot
-	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
+	buildCmd.Dir = parseProjectRoot
+	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
+		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
 	}
 
 	// Start ONLY file server, NOT the bridge server
-	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
-	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
+	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
+	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
 	go func() {
-		fileServer.ListenAndServe()
+		parseFileServer.ListenAndServe()
 	}()
-	t.Cleanup(func() {
-		fileServer.Shutdown(context.Background())
+	parseT.Cleanup(func() {
+		parseFileServer.Shutdown(context.Background())
 	})
 
 	time.Sleep(2 * time.Second)
 
 	// Browser automation
-	pw, err := playwright.Run()
-	if err != nil {
-		t.Fatalf("Could not start playwright: %v", err)
+	parsePw, parseErr := playwright.Run()
+	if parseErr != nil {
+		parseT.Fatalf("Could not start playwright: %v", parseErr)
 	}
-	defer pw.Stop()
+	defer parsePw.Stop()
 
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		t.Fatalf("Could not launch browser: %v", err)
+	parseBrowser, parseErr := parsePw.Chromium.Launch()
+	if parseErr != nil {
+		parseT.Fatalf("Could not launch browser: %v", parseErr)
 	}
-	defer browser.Close()
+	defer parseBrowser.Close()
 
-	page, err := browser.NewPage()
-	if err != nil {
-		t.Fatalf("Could not create page: %v", err)
+	parsePage, parseErr := parseBrowser.NewPage()
+	if parseErr != nil {
+		parseT.Fatalf("Could not create page: %v", parseErr)
 	}
 
-	consoleMessages := make(chan string, 100)
-	errorMessages := make(chan string, 100)
+	parseConsoleMessages := make(chan string, 100)
+	parseErrorMessages := make(chan string, 100)
 
-	page.On("console", func(msg playwright.ConsoleMessage) {
-		text := msg.Text()
-		t.Logf("[Browser Console] %s", text)
-		consoleMessages <- text
+	parsePage.On("console", func(parseMsg playwright.ConsoleMessage) {
+		parseText := parseMsg.Text()
+		parseT.Logf("[Browser Console] %s", parseText)
+		parseConsoleMessages <- parseText
 
-		if msg.Type() == "error" || strings.Contains(strings.ToLower(text), "error") ||
-			strings.Contains(strings.ToLower(text), "failed") {
-			errorMessages <- text
+		if parseMsg.Type() == "error" || strings.Contains(strings.ToLower(parseText), "error") ||
+			strings.Contains(strings.ToLower(parseText), "failed") {
+			parseErrorMessages <- parseText
 		}
 	})
 
-	if _, err = page.Goto("http://localhost:8081"); err != nil {
-		t.Fatalf("Failed to navigate: %v", err)
+	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+		parseT.Fatalf("Failed to navigate: %v", parseErr)
 	}
 
 	// Should see connection errors
-	timeout := time.After(15 * time.Second)
-	sawError := false
+	parseTimeout := time.After(15 * time.Second)
+	isSawError := false
 
 	for {
 		select {
-		case msg := <-errorMessages:
-			if strings.Contains(strings.ToLower(msg), "connection") ||
-				strings.Contains(strings.ToLower(msg), "refused") ||
-				strings.Contains(strings.ToLower(msg), "failed") {
-				t.Logf("Expected error received: %s", msg)
-				sawError = true
+		case parseMsg2 := <-parseErrorMessages:
+			if strings.Contains(strings.ToLower(parseMsg2), "connection") ||
+				strings.Contains(strings.ToLower(parseMsg2), "refused") ||
+				strings.Contains(strings.ToLower(parseMsg2), "failed") {
+				parseT.Logf("Expected error received: %s", parseMsg2)
+				isSawError = true
 				return
 			}
-		case <-timeout:
-			if !sawError {
-				t.Log("Warning: Expected connection error not observed, but test completed")
+		case <-parseTimeout:
+			if !isSawError {
+				parseT.Log("Warning: Expected connection error not observed, but test completed")
 			}
 			return
 		}
@@ -99,367 +99,367 @@ func TestServerUnavailable(t *testing.T) {
 }
 
 // TestRapidConnectDisconnect tests rapid connection cycling
-func TestRapidConnectDisconnect(t *testing.T) {
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+func TestRapidConnectDisconnect(parseT *testing.T) {
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Build
-	t.Log("Building components...")
+	parseT.Log("Building components...")
 	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = projectRoot
-	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
+	buildCmd.Dir = parseProjectRoot
+	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
+		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
 	}
 
 	// Start services
-	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
-	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
-	t.Cleanup(bridgeCleanup)
+	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
+	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseT.Cleanup(parseBridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
-	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
+	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
+	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
 	go func() {
-		fileServer.ListenAndServe()
+		parseFileServer.ListenAndServe()
 	}()
-	t.Cleanup(func() {
-		fileServer.Shutdown(context.Background())
+	parseT.Cleanup(func() {
+		parseFileServer.Shutdown(context.Background())
 	})
 
 	time.Sleep(3 * time.Second)
 
 	// Browser automation
-	pw, err := playwright.Run()
-	if err != nil {
-		t.Fatalf("Could not start playwright: %v", err)
+	parsePw, parseErr := playwright.Run()
+	if parseErr != nil {
+		parseT.Fatalf("Could not start playwright: %v", parseErr)
 	}
-	defer pw.Stop()
+	defer parsePw.Stop()
 
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		t.Fatalf("Could not launch browser: %v", err)
+	parseBrowser, parseErr := parsePw.Chromium.Launch()
+	if parseErr != nil {
+		parseT.Fatalf("Could not launch browser: %v", parseErr)
 	}
-	defer browser.Close()
+	defer parseBrowser.Close()
 
 	// Rapidly create and close connections
-	cycles := 5
-	for i := 0; i < cycles; i++ {
-		t.Logf("Connection cycle %d/%d", i+1, cycles)
+	parseCycles := 5
+	for parseI := 0; parseI < parseCycles; parseI++ {
+		parseT.Logf("Connection cycle %d/%d", parseI+1, parseCycles)
 
-		page, err := browser.NewPage()
-		if err != nil {
-			t.Fatalf("Failed to create page: %v", err)
+		parsePage, parseErr3 := parseBrowser.NewPage()
+		if parseErr3 != nil {
+			parseT.Fatalf("Failed to create page: %v", parseErr3)
 		}
 
-		page.On("console", func(msg playwright.ConsoleMessage) {
-			t.Logf("[Cycle %d Console] %s", i+1, msg.Text())
+		parsePage.On("console", func(parseMsg playwright.ConsoleMessage) {
+			parseT.Logf("[Cycle %d Console] %s", parseI+1, parseMsg.Text())
 		})
 
-		if _, err = page.Goto("http://localhost:8081"); err != nil {
-			t.Logf("Warning: Navigation failed on cycle %d: %v", i+1, err)
+		if _, parseErr3 = parsePage.Goto("http://localhost:8081"); parseErr3 != nil {
+			parseT.Logf("Warning: Navigation failed on cycle %d: %v", parseI+1, parseErr3)
 		}
 
 		// Wait briefly
 		time.Sleep(500 * time.Millisecond)
 
 		// Close the page
-		if err := page.Close(); err != nil {
-			t.Logf("Warning: Page close failed on cycle %d: %v", i+1, err)
+		if parseErr4 := parsePage.Close(); parseErr4 != nil {
+			parseT.Logf("Warning: Page close failed on cycle %d: %v", parseI+1, parseErr4)
 		}
 
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	t.Logf("Successfully completed %d rapid connect/disconnect cycles", cycles)
+	parseT.Logf("Successfully completed %d rapid connect/disconnect cycles", parseCycles)
 }
 
 // TestServerRestartDuringConnection tests handling of server restart
-func TestServerRestartDuringConnection(t *testing.T) {
+func TestServerRestartDuringConnection(parseT *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping long-running test in short mode")
+		parseT.Skip("Skipping long-running test in short mode")
 	}
 
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Build
-	t.Log("Building components...")
+	parseT.Log("Building components...")
 	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = projectRoot
-	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
+	buildCmd.Dir = parseProjectRoot
+	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
+		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
 	}
 
 	// Start file server
-	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
-	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
+	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
+	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
 	go func() {
-		fileServer.ListenAndServe()
+		parseFileServer.ListenAndServe()
 	}()
-	t.Cleanup(func() {
-		fileServer.Shutdown(context.Background())
+	parseT.Cleanup(func() {
+		parseFileServer.Shutdown(context.Background())
 	})
 
 	// Start initial bridge server
-	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
-	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
+	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
+	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
 
 	time.Sleep(3 * time.Second)
 
 	// Browser automation
-	pw, err := playwright.Run()
-	if err != nil {
-		t.Fatalf("Could not start playwright: %v", err)
+	parsePw, parseErr := playwright.Run()
+	if parseErr != nil {
+		parseT.Fatalf("Could not start playwright: %v", parseErr)
 	}
-	defer pw.Stop()
+	defer parsePw.Stop()
 
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		t.Fatalf("Could not launch browser: %v", err)
+	parseBrowser, parseErr := parsePw.Chromium.Launch()
+	if parseErr != nil {
+		parseT.Fatalf("Could not launch browser: %v", parseErr)
 	}
-	defer browser.Close()
+	defer parseBrowser.Close()
 
-	page, err := browser.NewPage()
-	if err != nil {
-		t.Fatalf("Could not create page: %v", err)
+	parsePage, parseErr := parseBrowser.NewPage()
+	if parseErr != nil {
+		parseT.Fatalf("Could not create page: %v", parseErr)
 	}
 
-	errorsSeen := make(chan string, 50)
-	page.On("console", func(msg playwright.ConsoleMessage) {
-		text := msg.Text()
-		t.Logf("[Browser Console] %s", text)
+	parseErrorsSeen := make(chan string, 50)
+	parsePage.On("console", func(parseMsg playwright.ConsoleMessage) {
+		parseText := parseMsg.Text()
+		parseT.Logf("[Browser Console] %s", parseText)
 
-		if msg.Type() == "error" || strings.Contains(strings.ToLower(text), "error") {
-			errorsSeen <- text
+		if parseMsg.Type() == "error" || strings.Contains(strings.ToLower(parseText), "error") {
+			parseErrorsSeen <- parseText
 		}
 	})
 
-	if _, err = page.Goto("http://localhost:8081"); err != nil {
-		t.Fatalf("Failed to navigate: %v", err)
+	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+		parseT.Fatalf("Failed to navigate: %v", parseErr)
 	}
 
 	time.Sleep(2 * time.Second)
 
 	// Kill the bridge server
-	t.Log("Stopping bridge server...")
-	bridgeCleanup()
+	parseT.Log("Stopping bridge server...")
+	parseBridgeCleanup()
 	time.Sleep(3 * time.Second)
 
 	// Should see connection errors
 	select {
-	case errMsg := <-errorsSeen:
-		t.Logf("Expected error after server shutdown: %s", errMsg)
+	case parseErrMsg := <-parseErrorsSeen:
+		parseT.Logf("Expected error after server shutdown: %s", parseErrMsg)
 	case <-time.After(5 * time.Second):
-		t.Log("No error message captured, but server was stopped")
+		parseT.Log("No error message captured, but server was stopped")
 	}
 
 	// Restart bridge server
-	t.Log("Restarting bridge server...")
-	bridgeCleanup = startCommand(t, projectRoot, "DirectBridge-Restarted", "go", "run", directBridgePath)
-	t.Cleanup(bridgeCleanup)
+	parseT.Log("Restarting bridge server...")
+	parseBridgeCleanup = startCommand(parseT, parseProjectRoot, "DirectBridge-Restarted", "go", "run", parseDirectBridgePath)
+	parseT.Cleanup(parseBridgeCleanup)
 
 	time.Sleep(3 * time.Second)
-	t.Log("Server restart test completed - manual verification may be needed for full reconnection")
+	parseT.Log("Server restart test completed - manual verification may be needed for full reconnection")
 }
 
 // TestInvalidWebSocketUpgrade tests handling of non-WebSocket connections
-func TestInvalidWebSocketUpgrade(t *testing.T) {
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+func TestInvalidWebSocketUpgrade(parseT *testing.T) {
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Start bridge server
-	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
-	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
-	t.Cleanup(bridgeCleanup)
+	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
+	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseT.Cleanup(parseBridgeCleanup)
 
 	time.Sleep(3 * time.Second)
 
 	// Try to make a regular HTTP request to the WebSocket endpoint
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("http://localhost:5000")
+	parseClient := &http.Client{Timeout: 5 * time.Second}
+	parseResp, parseErr := parseClient.Get("http://localhost:5000")
 
-	if err != nil {
-		t.Logf("Expected error on non-WebSocket request: %v", err)
+	if parseErr != nil {
+		parseT.Logf("Expected error on non-WebSocket request: %v", parseErr)
 		return
 	}
-	defer resp.Body.Close()
+	defer parseResp.Body.Close()
 
 	// Should get an error or upgrade required status
-	if resp.StatusCode == http.StatusBadRequest ||
-		resp.StatusCode == http.StatusUpgradeRequired ||
-		resp.StatusCode >= 400 {
-		t.Logf("Server correctly rejected non-WebSocket request with status: %d", resp.StatusCode)
+	if parseResp.StatusCode == http.StatusBadRequest ||
+		parseResp.StatusCode == http.StatusUpgradeRequired ||
+		parseResp.StatusCode >= 400 {
+		parseT.Logf("Server correctly rejected non-WebSocket request with status: %d", parseResp.StatusCode)
 	} else {
-		t.Logf("Warning: Unexpected status code for non-WebSocket request: %d", resp.StatusCode)
+		parseT.Logf("Warning: Unexpected status code for non-WebSocket request: %d", parseResp.StatusCode)
 	}
 }
 
 // TestMaxConcurrentConnections tests system behavior under high connection count
-func TestMaxConcurrentConnections(t *testing.T) {
+func TestMaxConcurrentConnections(parseT *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping stress test in short mode")
+		parseT.Skip("Skipping stress test in short mode")
 	}
 
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Build
-	t.Log("Building components...")
+	parseT.Log("Building components...")
 	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = projectRoot
-	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
+	buildCmd.Dir = parseProjectRoot
+	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
+		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
 	}
 
 	// Start services
-	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
-	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
-	t.Cleanup(bridgeCleanup)
+	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
+	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseT.Cleanup(parseBridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
-	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
+	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
+	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
 	go func() {
-		fileServer.ListenAndServe()
+		parseFileServer.ListenAndServe()
 	}()
-	t.Cleanup(func() {
-		fileServer.Shutdown(context.Background())
+	parseT.Cleanup(func() {
+		parseFileServer.Shutdown(context.Background())
 	})
 
 	time.Sleep(3 * time.Second)
 
 	// Browser automation
-	pw, err := playwright.Run()
-	if err != nil {
-		t.Fatalf("Could not start playwright: %v", err)
+	parsePw, parseErr := playwright.Run()
+	if parseErr != nil {
+		parseT.Fatalf("Could not start playwright: %v", parseErr)
 	}
-	defer pw.Stop()
+	defer parsePw.Stop()
 
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		t.Fatalf("Could not launch browser: %v", err)
+	parseBrowser, parseErr := parsePw.Chromium.Launch()
+	if parseErr != nil {
+		parseT.Fatalf("Could not launch browser: %v", parseErr)
 	}
-	defer browser.Close()
+	defer parseBrowser.Close()
 
 	// Try to create many connections (10 tabs)
-	numConnections := 10
-	pages := make([]playwright.Page, 0, numConnections)
-	successCount := 0
+	parseNumConnections := 10
+	parsePages := make([]playwright.Page, 0, parseNumConnections)
+	parseSuccessCount := 0
 
-	for i := 0; i < numConnections; i++ {
-		page, err := browser.NewPage()
-		if err != nil {
-			t.Logf("Failed to create page %d: %v", i+1, err)
+	for parseI := 0; parseI < parseNumConnections; parseI++ {
+		parsePage, parseErr3 := parseBrowser.NewPage()
+		if parseErr3 != nil {
+			parseT.Logf("Failed to create page %d: %v", parseI+1, parseErr3)
 			continue
 		}
-		pages = append(pages, page)
+		parsePages = append(parsePages, parsePage)
 
-		page.On("console", func(msg playwright.ConsoleMessage) {
-			t.Logf("[Connection %d] %s", i+1, msg.Text())
+		parsePage.On("console", func(parseMsg playwright.ConsoleMessage) {
+			parseT.Logf("[Connection %d] %s", parseI+1, parseMsg.Text())
 		})
 
-		if _, err = page.Goto("http://localhost:8081"); err != nil {
-			t.Logf("Failed to navigate page %d: %v", i+1, err)
+		if _, parseErr3 = parsePage.Goto("http://localhost:8081"); parseErr3 != nil {
+			parseT.Logf("Failed to navigate page %d: %v", parseI+1, parseErr3)
 			continue
 		}
 
-		successCount++
+		parseSuccessCount++
 	}
 
-	t.Logf("Successfully created %d/%d connections", successCount, numConnections)
+	parseT.Logf("Successfully created %d/%d connections", parseSuccessCount, parseNumConnections)
 
 	// Clean up pages
-	for _, page := range pages {
-		page.Close()
+	for _, parsePage2 := range parsePages {
+		parsePage2.Close()
 	}
 
-	if successCount < numConnections/2 {
-		t.Errorf("Too many connection failures: only %d/%d succeeded", successCount, numConnections)
+	if parseSuccessCount < parseNumConnections/2 {
+		parseT.Errorf("Too many connection failures: only %d/%d succeeded", parseSuccessCount, parseNumConnections)
 	}
 }
 
 // TestNetworkTimeout tests handling of slow/timeout scenarios
-func TestNetworkTimeout(t *testing.T) {
+func TestNetworkTimeout(parseT *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping timeout test in short mode")
+		parseT.Skip("Skipping timeout test in short mode")
 	}
 
-	projectRoot, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatalf("Failed to get project root: %v", err)
+	parseProjectRoot, parseErr := filepath.Abs("..")
+	if parseErr != nil {
+		parseT.Fatalf("Failed to get project root: %v", parseErr)
 	}
 
 	// Build
-	t.Log("Building components...")
+	parseT.Log("Building components...")
 	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = projectRoot
-	if buildOutput, err := buildCmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to build: %v\nOutput: %s", err, string(buildOutput))
+	buildCmd.Dir = parseProjectRoot
+	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
+		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
 	}
 
 	// Start services
-	directBridgePath := filepath.Join(projectRoot, "examples", "direct-bridge", "main.go")
-	bridgeCleanup := startCommand(t, projectRoot, "DirectBridge", "go", "run", directBridgePath)
-	t.Cleanup(bridgeCleanup)
+	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
+	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseT.Cleanup(parseBridgeCleanup)
 
-	publicDir := http.Dir(filepath.Join(projectRoot, "examples", "_shared", "public"))
-	fileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(publicDir)}
+	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
+	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
 	go func() {
-		fileServer.ListenAndServe()
+		parseFileServer.ListenAndServe()
 	}()
-	t.Cleanup(func() {
-		fileServer.Shutdown(context.Background())
+	parseT.Cleanup(func() {
+		parseFileServer.Shutdown(context.Background())
 	})
 
 	time.Sleep(3 * time.Second)
 
 	// Browser automation with short timeout
-	pw, err := playwright.Run()
-	if err != nil {
-		t.Fatalf("Could not start playwright: %v", err)
+	parsePw, parseErr := playwright.Run()
+	if parseErr != nil {
+		parseT.Fatalf("Could not start playwright: %v", parseErr)
 	}
-	defer pw.Stop()
+	defer parsePw.Stop()
 
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		t.Fatalf("Could not launch browser: %v", err)
+	parseBrowser, parseErr := parsePw.Chromium.Launch()
+	if parseErr != nil {
+		parseT.Fatalf("Could not launch browser: %v", parseErr)
 	}
-	defer browser.Close()
+	defer parseBrowser.Close()
 
-	page, err := browser.NewPage()
-	if err != nil {
-		t.Fatalf("Could not create page: %v", err)
+	parsePage, parseErr := parseBrowser.NewPage()
+	if parseErr != nil {
+		parseT.Fatalf("Could not create page: %v", parseErr)
 	}
 
 	// Set aggressive timeout
-	page.SetDefaultTimeout(5000) // 5 seconds
+	parsePage.SetDefaultTimeout(5000) // 5 seconds
 
-	timeoutSeen := false
-	page.On("console", func(msg playwright.ConsoleMessage) {
-		text := msg.Text()
-		t.Logf("[Browser Console] %s", text)
+	isTimeoutSeen := false
+	parsePage.On("console", func(parseMsg playwright.ConsoleMessage) {
+		parseText := parseMsg.Text()
+		parseT.Logf("[Browser Console] %s", parseText)
 
-		if strings.Contains(strings.ToLower(text), "timeout") {
-			timeoutSeen = true
+		if strings.Contains(strings.ToLower(parseText), "timeout") {
+			isTimeoutSeen = true
 		}
 	})
 
-	if _, err = page.Goto("http://localhost:8081"); err != nil {
-		t.Logf("Navigation completed (may have timeout internally): %v", err)
+	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+		parseT.Logf("Navigation completed (may have timeout internally): %v", parseErr)
 	}
 
 	// Wait and check for timeout messages
 	time.Sleep(8 * time.Second)
 
-	if timeoutSeen {
-		t.Log("Timeout handling verified")
+	if isTimeoutSeen {
+		parseT.Log("Timeout handling verified")
 	} else {
-		t.Log("No timeout observed (connection may be fast)")
+		parseT.Log("No timeout observed (connection may be fast)")
 	}
 }

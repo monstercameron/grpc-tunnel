@@ -49,8 +49,8 @@ type Logger interface {
 
 type defaultLogger struct{}
 
-func (defaultLogger) Printf(format string, v ...interface{}) {
-	log.Printf(format, v...)
+func (defaultLogger) Printf(format string, parseV ...interface{}) {
+	log.Printf(format, parseV...)
 }
 
 // Handler is the gRPC-over-WebSocket bridge handler.
@@ -71,82 +71,82 @@ type Handler struct {
 //	})
 //	http.Handle("/", handler)
 //	http.ListenAndServe(":8080", nil)
-func NewHandler(cfg Config) *Handler {
+func NewHandler(parseCfg Config) *Handler {
 	// Set defaults
-	if cfg.ReadBufferSize == 0 {
-		cfg.ReadBufferSize = 4096
+	if parseCfg.ReadBufferSize == 0 {
+		parseCfg.ReadBufferSize = 4096
 	}
-	if cfg.WriteBufferSize == 0 {
-		cfg.WriteBufferSize = 4096
+	if parseCfg.WriteBufferSize == 0 {
+		parseCfg.WriteBufferSize = 4096
 	}
-	if cfg.CheckOrigin == nil {
-		cfg.CheckOrigin = func(r *http.Request) bool { return true }
+	if parseCfg.CheckOrigin == nil {
+		parseCfg.CheckOrigin = func(parseR *http.Request) bool { return true }
 	}
-	if cfg.Logger == nil {
-		cfg.Logger = defaultLogger{}
+	if parseCfg.Logger == nil {
+		parseCfg.Logger = defaultLogger{}
 	}
 
-	targetURL, _ := url.Parse("http://" + cfg.TargetAddress)
+	parseTargetURL, _ := url.Parse("http://" + parseCfg.TargetAddress)
 
-	h := &Handler{
-		config: cfg,
-		logger: cfg.Logger,
+	parseH := &Handler{
+		config: parseCfg,
+		logger: parseCfg.Logger,
 		upgrader: websocket.Upgrader{
-			ReadBufferSize:  cfg.ReadBufferSize,
-			WriteBufferSize: cfg.WriteBufferSize,
-			CheckOrigin:     cfg.CheckOrigin,
+			ReadBufferSize:  parseCfg.ReadBufferSize,
+			WriteBufferSize: parseCfg.WriteBufferSize,
+			CheckOrigin:     parseCfg.CheckOrigin,
 		},
 	}
 
 	// Create the reverse proxy
-	h.proxy = &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = targetURL.Scheme
-			req.URL.Host = targetURL.Host
-			req.Host = targetURL.Host
+	parseH.proxy = &httputil.ReverseProxy{
+		Director: func(parseReq *http.Request) {
+			parseReq.URL.Scheme = parseTargetURL.Scheme
+			parseReq.URL.Host = parseTargetURL.Host
+			parseReq.Host = parseTargetURL.Host
 		},
 		Transport: &http2.Transport{
 			AllowHTTP: true,
-			DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-				return net.Dial(network, addr)
+			DialTLS: func(parseNetwork, parseAddr string, parseCfg2 *tls.Config) (net.Conn, error) {
+				return net.Dial(parseNetwork, parseAddr)
 			},
 		},
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			h.logger.Printf("Proxy error: %v", err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
+		ErrorHandler: func(parseW http.ResponseWriter, parseR2 *http.Request, parseErr error) {
+			parseH.logger.Printf("Proxy error: %v", parseErr)
+			http.Error(parseW, parseErr.Error(), http.StatusBadGateway)
 		},
 	}
 
-	return h
+	return parseH
 }
 
 // ServeHTTP implements http.Handler. This is called for each incoming HTTP request.
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (parseH *Handler) ServeHTTP(parseW http.ResponseWriter, parseR *http.Request) {
 	// Upgrade to WebSocket
-	ws, err := h.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		h.logger.Printf("WebSocket upgrade failed: %v", err)
+	parseWs, parseErr := parseH.upgrader.Upgrade(parseW, parseR, nil)
+	if parseErr != nil {
+		parseH.logger.Printf("WebSocket upgrade failed: %v", parseErr)
 		return
 	}
-	defer ws.Close()
+	defer parseWs.Close()
 
 	// Call OnConnect callback
-	if h.config.OnConnect != nil {
-		h.config.OnConnect(r)
+	if parseH.config.OnConnect != nil {
+		parseH.config.OnConnect(parseR)
 	}
 	defer func() {
-		if h.config.OnDisconnect != nil {
-			h.config.OnDisconnect(r)
+		if parseH.config.OnDisconnect != nil {
+			parseH.config.OnDisconnect(parseR)
 		}
 	}()
 
 	// Wrap WebSocket as net.Conn
-	conn := bridge.NewWebSocketConn(ws)
-	defer conn.Close()
+	parseConn := bridge.NewWebSocketConn(parseWs)
+	defer parseConn.Close()
 
 	// Serve HTTP/2 over the WebSocket connection
-	http2Server := &http2.Server{}
-	http2Server.ServeConn(conn, &http2.ServeConnOpts{
-		Handler: h2c.NewHandler(h.proxy, http2Server),
+	parseHttp2Server := &http2.Server{}
+	parseHttp2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+		Handler: h2c.NewHandler(parseH.proxy, parseHttp2Server),
 	})
 }

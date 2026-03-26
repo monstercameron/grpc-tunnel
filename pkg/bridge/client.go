@@ -41,19 +41,19 @@ import (
 //
 // Note: The target address parameter in grpc.Dial() is ignored when using this
 // DialOption - the connection is made to the WebSocket URL instead.
-func DialOption(websocketURL string) grpc.DialOption {
-	return grpc.WithContextDialer(func(ctx context.Context, grpcTargetAddress string) (net.Conn, error) {
+func DialOption(parseWebsocketURL string) grpc.DialOption {
+	return grpc.WithContextDialer(func(parseCtx context.Context, parseGrpcTargetAddress string) (net.Conn, error) {
 		// Dial the WebSocket connection using the provided URL.
 		// The grpcTargetAddress parameter (from grpc.Dial) is ignored because the WebSocket
 		// URL contains the complete target address.
-		websocketConnection, _, err := websocket.DefaultDialer.DialContext(ctx, websocketURL, nil)
-		if err != nil {
+		parseWebsocketConnection, _, parseErr := websocket.DefaultDialer.DialContext(parseCtx, parseWebsocketURL, nil)
+		if parseErr != nil {
 			// WebSocket connection failed (network error, DNS resolution, etc.)
-			return nil, err
+			return nil, parseErr
 		}
 
 		// Wrap the WebSocket as a net.Conn so gRPC can use it.
 		// This allows gRPC to send HTTP/2 frames over the WebSocket.
-		return NewWebSocketConn(websocketConnection), nil
+		return NewWebSocketConn(parseWebsocketConnection), nil
 	})
 }

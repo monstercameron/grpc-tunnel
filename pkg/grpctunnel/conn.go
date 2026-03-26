@@ -22,87 +22,87 @@ type webSocketConn struct {
 	deadlineMu sync.Mutex // Protects deadline operations
 }
 
-func newWebSocketConn(ws *websocket.Conn) net.Conn {
-	return &webSocketConn{ws: ws}
+func newWebSocketConn(parseWs *websocket.Conn) net.Conn {
+	return &webSocketConn{ws: parseWs}
 }
 
-func (c *webSocketConn) Read(p []byte) (int, error) {
-	c.closedMu.RLock()
-	if c.closed {
-		c.closedMu.RUnlock()
+func (parseC *webSocketConn) Read(parseP []byte) (int, error) {
+	parseC.closedMu.RLock()
+	if parseC.closed {
+		parseC.closedMu.RUnlock()
 		return 0, io.EOF
 	}
-	c.closedMu.RUnlock()
+	parseC.closedMu.RUnlock()
 
-	if c.reader == nil {
-		messageType, reader, err := c.ws.NextReader()
-		if err != nil {
-			return 0, err
+	if parseC.reader == nil {
+		parseMessageType, parseReader, parseErr := parseC.ws.NextReader()
+		if parseErr != nil {
+			return 0, parseErr
 		}
-		if messageType != websocket.BinaryMessage {
+		if parseMessageType != websocket.BinaryMessage {
 			return 0, io.EOF
 		}
-		c.reader = reader
+		parseC.reader = parseReader
 	}
 
-	n, err := c.reader.Read(p)
-	if err == io.EOF {
-		c.reader = nil
-		err = nil
+	parseN, parseErr2 := parseC.reader.Read(parseP)
+	if parseErr2 == io.EOF {
+		parseC.reader = nil
+		parseErr2 = nil
 	}
-	return n, err
+	return parseN, parseErr2
 }
 
-func (c *webSocketConn) Write(p []byte) (int, error) {
-	c.closedMu.RLock()
-	if c.closed {
-		c.closedMu.RUnlock()
+func (parseC *webSocketConn) Write(parseP []byte) (int, error) {
+	parseC.closedMu.RLock()
+	if parseC.closed {
+		parseC.closedMu.RUnlock()
 		return 0, io.ErrClosedPipe
 	}
-	c.closedMu.RUnlock()
+	parseC.closedMu.RUnlock()
 
-	if err := c.ws.WriteMessage(websocket.BinaryMessage, p); err != nil {
-		return 0, err
+	if parseErr := parseC.ws.WriteMessage(websocket.BinaryMessage, parseP); parseErr != nil {
+		return 0, parseErr
 	}
-	return len(p), nil
+	return len(parseP), nil
 }
 
-func (c *webSocketConn) Close() error {
-	var err error
-	c.closeOnce.Do(func() {
-		c.closedMu.Lock()
-		c.closed = true
-		c.closedMu.Unlock()
-		err = c.ws.Close()
+func (parseC *webSocketConn) Close() error {
+	var parseErr error
+	parseC.closeOnce.Do(func() {
+		parseC.closedMu.Lock()
+		parseC.closed = true
+		parseC.closedMu.Unlock()
+		parseErr = parseC.ws.Close()
 	})
-	return err
+	return parseErr
 }
 
-func (c *webSocketConn) LocalAddr() net.Addr {
-	return c.ws.LocalAddr()
+func (parseC *webSocketConn) LocalAddr() net.Addr {
+	return parseC.ws.LocalAddr()
 }
 
-func (c *webSocketConn) RemoteAddr() net.Addr {
-	return c.ws.RemoteAddr()
+func (parseC *webSocketConn) RemoteAddr() net.Addr {
+	return parseC.ws.RemoteAddr()
 }
 
-func (c *webSocketConn) SetDeadline(t time.Time) error {
-	c.deadlineMu.Lock()
-	defer c.deadlineMu.Unlock()
-	if err := c.ws.SetReadDeadline(t); err != nil {
-		return err
+func (parseC *webSocketConn) SetDeadline(parseT time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+	if parseErr := parseC.ws.SetReadDeadline(parseT); parseErr != nil {
+		return parseErr
 	}
-	return c.ws.SetWriteDeadline(t)
+	return parseC.ws.SetWriteDeadline(parseT)
 }
 
-func (c *webSocketConn) SetReadDeadline(t time.Time) error {
-	c.deadlineMu.Lock()
-	defer c.deadlineMu.Unlock()
-	return c.ws.SetReadDeadline(t)
+func (parseC *webSocketConn) SetReadDeadline(parseT time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+	return parseC.ws.SetReadDeadline(parseT)
 }
 
-func (c *webSocketConn) SetWriteDeadline(t time.Time) error {
-	c.deadlineMu.Lock()
-	defer c.deadlineMu.Unlock()
-	return c.ws.SetWriteDeadline(t)
+func (parseC *webSocketConn) SetWriteDeadline(parseT time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+	return parseC.ws.SetWriteDeadline(parseT)
 }

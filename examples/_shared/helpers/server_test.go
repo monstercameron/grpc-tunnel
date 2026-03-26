@@ -11,17 +11,17 @@ import (
 )
 
 // TestServerConfig_Defaults tests that default values are set correctly
-func TestServerConfig_Defaults(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServerConfig_Defaults(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
-	cfg := ServerConfig{
-		GRPCServer: grpcServer,
+	parseCfg := ServerConfig{
+		GRPCServer: parseGrpcServer,
 	}
 
-	handler := ServeHandler(cfg)
+	handler := ServeHandler(parseCfg)
 	if handler == nil {
-		t.Fatal("ServeHandler returned nil")
+		parseT.Fatal("ServeHandler returned nil")
 	}
 
 	// The handler creation should set defaults internally
@@ -29,135 +29,135 @@ func TestServerConfig_Defaults(t *testing.T) {
 }
 
 // TestServerConfig_CustomBufferSizes tests custom buffer sizes
-func TestServerConfig_CustomBufferSizes(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServerConfig_CustomBufferSizes(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
-	cfg := ServerConfig{
-		GRPCServer:      grpcServer,
+	parseCfg := ServerConfig{
+		GRPCServer:      parseGrpcServer,
 		ReadBufferSize:  8192,
 		WriteBufferSize: 8192,
 	}
 
-	handler := ServeHandler(cfg)
+	handler := ServeHandler(parseCfg)
 	if handler == nil {
-		t.Fatal("ServeHandler returned nil")
+		parseT.Fatal("ServeHandler returned nil")
 	}
 }
 
 // TestServerConfig_CheckOrigin tests custom origin checker
-func TestServerConfig_CheckOrigin(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServerConfig_CheckOrigin(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
-	allowedOrigin := "https://example.com"
-	cfg := ServerConfig{
-		GRPCServer: grpcServer,
-		CheckOrigin: func(r *http.Request) bool {
-			origin := r.Header.Get("Origin")
-			return origin == allowedOrigin
+	parseAllowedOrigin := "https://example.com"
+	parseCfg := ServerConfig{
+		GRPCServer: parseGrpcServer,
+		CheckOrigin: func(parseR *http.Request) bool {
+			parseOrigin := parseR.Header.Get("Origin")
+			return parseOrigin == parseAllowedOrigin
 		},
 	}
 
-	handler := ServeHandler(cfg)
+	handler := ServeHandler(parseCfg)
 	if handler == nil {
-		t.Fatal("ServeHandler returned nil")
+		parseT.Fatal("ServeHandler returned nil")
 	}
 
 	// Test with non-WebSocket request (should fail upgrade)
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Origin", allowedOrigin)
-	w := httptest.NewRecorder()
+	parseReq := httptest.NewRequest("GET", "/", nil)
+	parseReq.Header.Set("Origin", parseAllowedOrigin)
+	parseW := httptest.NewRecorder()
 
-	handler.ServeHTTP(w, req)
+	handler.ServeHTTP(parseW, parseReq)
 
 	// Should fail because it's not a valid WebSocket upgrade request
-	if w.Code == http.StatusSwitchingProtocols {
-		t.Error("expected upgrade to fail without proper WebSocket headers")
+	if parseW.Code == http.StatusSwitchingProtocols {
+		parseT.Error("expected upgrade to fail without proper WebSocket headers")
 	}
 }
 
 // TestServerConfig_LifecycleHooks tests OnConnect and OnDisconnect
-func TestServerConfig_LifecycleHooks(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServerConfig_LifecycleHooks(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
-	connectCalled := false
-	disconnectCalled := false
+	isConnectCalled := false
+	isDisconnectCalled := false
 
-	cfg := ServerConfig{
-		GRPCServer: grpcServer,
-		OnConnect: func(r *http.Request) {
-			connectCalled = true
+	parseCfg := ServerConfig{
+		GRPCServer: parseGrpcServer,
+		OnConnect: func(parseR *http.Request) {
+			isConnectCalled = true
 		},
-		OnDisconnect: func(r *http.Request) {
-			disconnectCalled = true
+		OnDisconnect: func(parseR2 *http.Request) {
+			isDisconnectCalled = true
 		},
 	}
 
-	handler := ServeHandler(cfg)
+	handler := ServeHandler(parseCfg)
 	if handler == nil {
-		t.Fatal("ServeHandler returned nil")
+		parseT.Fatal("ServeHandler returned nil")
 	}
 
 	// Note: We can't easily test the hooks being called without a real WebSocket upgrade
 	// The hooks would only be called after successful WebSocket upgrade
 	// This test verifies the handler can be created with hooks
-	_, _ = connectCalled, disconnectCalled // Suppress unused warnings
+	_, _ = isConnectCalled, isDisconnectCalled // Suppress unused warnings
 }
 
 // TestServeHandler_NotWebSocket tests handling of non-WebSocket requests
-func TestServeHandler_NotWebSocket(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServeHandler_NotWebSocket(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
+	parseReq := httptest.NewRequest("GET", "/", nil)
+	parseW := httptest.NewRecorder()
 
-	handler.ServeHTTP(w, req)
+	handler.ServeHTTP(parseW, parseReq)
 
 	// Should fail to upgrade because it's not a WebSocket request
-	if w.Code == http.StatusSwitchingProtocols {
-		t.Error("expected failure for non-WebSocket request")
+	if parseW.Code == http.StatusSwitchingProtocols {
+		parseT.Error("expected failure for non-WebSocket request")
 	}
 }
 
 // TestServeHandler_WebSocketHeaders tests with WebSocket upgrade headers
-func TestServeHandler_WebSocketHeaders(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServeHandler_WebSocketHeaders(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Upgrade", "websocket")
-	req.Header.Set("Connection", "Upgrade")
-	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	parseReq := httptest.NewRequest("GET", "/", nil)
+	parseReq.Header.Set("Upgrade", "websocket")
+	parseReq.Header.Set("Connection", "Upgrade")
+	parseReq.Header.Set("Sec-WebSocket-Version", "13")
+	parseReq.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 
-	w := httptest.NewRecorder()
+	parseW := httptest.NewRecorder()
 
-	handler.ServeHTTP(w, req)
+	handler.ServeHTTP(parseW, parseReq)
 
 	// Should attempt upgrade (may still fail in test environment)
 	// The important part is it doesn't panic
 }
 
 // TestServeHandler_NilGRPCServer tests with nil gRPC server
-func TestServeHandler_NilGRPCServer(t *testing.T) {
+func TestServeHandler_NilGRPCServer(parseT *testing.T) {
 	// Creating handler with nil server should work, but serving will fail
 	handler := ServeHandler(ServerConfig{
 		GRPCServer: nil,
 	})
 
 	if handler == nil {
-		t.Error("ServeHandler returned nil even with nil GRPCServer")
+		parseT.Error("ServeHandler returned nil even with nil GRPCServer")
 	}
 
 	// Attempting to serve will panic when h2c.NewHandler is called
@@ -165,9 +165,9 @@ func TestServeHandler_NilGRPCServer(t *testing.T) {
 }
 
 // TestServe tests the Serve convenience function
-func TestServe(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServe(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	// Create a test listener
 	// We'll test that Serve doesn't panic and returns when stopped
@@ -178,88 +178,88 @@ func TestServe(t *testing.T) {
 }
 
 // TestServeHandler_ContextCancellation tests behavior when context is cancelled
-func TestServeHandler_ContextCancellation(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServeHandler_ContextCancellation(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	parseCtx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	req := httptest.NewRequest("GET", "/", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
+	parseReq := httptest.NewRequest("GET", "/", nil).WithContext(parseCtx)
+	parseW := httptest.NewRecorder()
 
 	// Should handle cancelled context gracefully
-	handler.ServeHTTP(w, req)
+	handler.ServeHTTP(parseW, parseReq)
 }
 
 // TestServerConfig_ZeroValues tests behavior with zero-value config
-func TestServerConfig_ZeroValues(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServerConfig_ZeroValues(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	// Only required field set
-	cfg := ServerConfig{
-		GRPCServer: grpcServer,
+	parseCfg := ServerConfig{
+		GRPCServer: parseGrpcServer,
 	}
 
-	handler := ServeHandler(cfg)
+	handler := ServeHandler(parseCfg)
 	if handler == nil {
-		t.Fatal("ServeHandler should work with minimal config")
+		parseT.Fatal("ServeHandler should work with minimal config")
 	}
 }
 
 // TestServeHandler_InvalidOrigin tests origin rejection
-func TestServeHandler_InvalidOrigin(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServeHandler_InvalidOrigin(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
-		CheckOrigin: func(r *http.Request) bool {
+		GRPCServer: parseGrpcServer,
+		CheckOrigin: func(parseR *http.Request) bool {
 			return false // Reject all origins
 		},
 	})
 
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Origin", "https://evil.com")
-	req.Header.Set("Upgrade", "websocket")
-	req.Header.Set("Connection", "Upgrade")
-	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	parseReq := httptest.NewRequest("GET", "/", nil)
+	parseReq.Header.Set("Origin", "https://evil.com")
+	parseReq.Header.Set("Upgrade", "websocket")
+	parseReq.Header.Set("Connection", "Upgrade")
+	parseReq.Header.Set("Sec-WebSocket-Version", "13")
+	parseReq.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	parseW := httptest.NewRecorder()
+	handler.ServeHTTP(parseW, parseReq)
 
 	// Should reject the upgrade due to origin check
-	if w.Code == http.StatusSwitchingProtocols {
-		t.Error("expected origin rejection")
+	if parseW.Code == http.StatusSwitchingProtocols {
+		parseT.Error("expected origin rejection")
 	}
 }
 
 // TestServeHandler_HTTPMethod tests different HTTP methods
-func TestServeHandler_HTTPMethod(t *testing.T) {
-	grpcServer := grpc.NewServer()
-	defer grpcServer.Stop()
+func TestServeHandler_HTTPMethod(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	defer parseGrpcServer.Stop()
 
 	handler := ServeHandler(ServerConfig{
-		GRPCServer: grpcServer,
+		GRPCServer: parseGrpcServer,
 	})
 
-	methods := []string{"POST", "PUT", "DELETE", "PATCH"}
-	for _, method := range methods {
-		t.Run(method, func(t *testing.T) {
-			req := httptest.NewRequest(method, "/", strings.NewReader("test"))
-			w := httptest.NewRecorder()
+	parseMethods := []string{"POST", "PUT", "DELETE", "PATCH"}
+	for _, parseMethod := range parseMethods {
+		parseT.Run(parseMethod, func(parseT2 *testing.T) {
+			parseReq := httptest.NewRequest(parseMethod, "/", strings.NewReader("test"))
+			parseW := httptest.NewRecorder()
 
-			handler.ServeHTTP(w, req)
+			handler.ServeHTTP(parseW, parseReq)
 
 			// Non-GET requests with WebSocket upgrade should fail
-			if w.Code == http.StatusSwitchingProtocols {
-				t.Errorf("unexpected upgrade success for %s method", method)
+			if parseW.Code == http.StatusSwitchingProtocols {
+				parseT2.Errorf("unexpected upgrade success for %s method", parseMethod)
 			}
 		})
 	}

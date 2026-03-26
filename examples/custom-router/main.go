@@ -10,37 +10,37 @@ import (
 )
 
 func main() {
-	mux := http.NewServeMux()
+	parseMux := http.NewServeMux()
 
 	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("OK")); err != nil {
-			log.Printf("Failed to write health response: %v", err)
+	parseMux.HandleFunc("/health", func(parseW http.ResponseWriter, parseR *http.Request) {
+		parseW.WriteHeader(http.StatusOK)
+		if _, parseErr := parseW.Write([]byte("OK")); parseErr != nil {
+			log.Printf("Failed to write health response: %v", parseErr)
 		}
 	})
 
 	// Metrics endpoint
-	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+	parseMux.HandleFunc("/metrics", func(parseW2 http.ResponseWriter, parseR2 *http.Request) {
 		// Your metrics implementation
-		if _, err := w.Write([]byte("# Metrics here\n")); err != nil {
-			log.Printf("Failed to write metrics response: %v", err)
+		if _, parseErr2 := parseW2.Write([]byte("# Metrics here\n")); parseErr2 != nil {
+			log.Printf("Failed to write metrics response: %v", parseErr2)
 		}
 	})
 
 	// gRPC bridge on specific path
-	mux.Handle("/grpc", helpers.NewHandler(helpers.Config{
+	parseMux.Handle("/grpc", helpers.NewHandler(helpers.Config{
 		TargetAddress: "localhost:50051",
 	}))
 
 	// Another bridge for a different service
-	mux.Handle("/api/v2/grpc", helpers.NewHandler(helpers.Config{
+	parseMux.Handle("/api/v2/grpc", helpers.NewHandler(helpers.Config{
 		TargetAddress: "localhost:50052",
 	}))
 
-	server := &http.Server{
+	parseServer := &http.Server{
 		Addr:         ":8080",
-		Handler:      mux,
+		Handler:      parseMux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -51,5 +51,5 @@ func main() {
 	log.Println("  /metrics      - Prometheus metrics")
 	log.Println("  /grpc         - gRPC bridge to :50051")
 	log.Println("  /api/v2/grpc  - gRPC bridge to :50052")
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(parseServer.ListenAndServe())
 }

@@ -10,7 +10,7 @@ import (
 // - client_test.go: Tests for DialOption (non-WASM builds)
 
 // TestPackage is a placeholder to ensure the test package compiles
-func TestPackage(t *testing.T) {
+func TestPackage(parseT *testing.T) {
 	// This package has comprehensive tests in dedicated test files
-	t.Log("Bridge package tests are split across multiple files for better organization")
+	parseT.Log("Bridge package tests are split across multiple files for better organization")
 }
