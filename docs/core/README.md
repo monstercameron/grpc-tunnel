@@ -41,7 +41,7 @@ Browsers do not expose raw TCP/HTTP2 sockets for native gRPC clients. GoGRPCBrid
 | Define auth propagation boundaries | [AUTH_PROPAGATION_BOUNDARIES.md](./AUTH_PROPAGATION_BOUNDARIES.md) |
 | Prepare secure release sign-off | [SECURITY_RELEASE_CHECKLIST.md](./SECURITY_RELEASE_CHECKLIST.md) |
 | Understand compatibility guarantees | [API_COMPATIBILITY.md](./API_COMPATIBILITY.md) |
-| Review API compatibility baseline | [api_compatibility_baseline.json](./api_compatibility_baseline.json) |
+| Review API compatibility baseline | [api_compatibility_baseline.json](../../api_compatibility_baseline.json) |
 | Run tests and benchmarks | [Development Runner](#development-runner) |
 | Understand release quality gates | [QUALITY_GATES.md](./QUALITY_GATES.md) |
 | Run release sign-off checklist | [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) |
@@ -51,7 +51,7 @@ Browsers do not expose raw TCP/HTTP2 sockets for native gRPC clients. GoGRPCBrid
 | Run rollback/hotfix process | [ROLLBACK_AND_HOTFIX.md](./ROLLBACK_AND_HOTFIX.md) |
 | Follow deployment runbook | [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) |
 | Implement observability contract | [OBSERVABILITY_CONTRACT.md](./OBSERVABILITY_CONTRACT.md) |
-| Wire dashboard and alert templates | [observability/](./observability/) |
+| Wire dashboard and alert templates | [observability/](../observability/) |
 | Review production SLO policy | [SLO_POLICY.md](./SLO_POLICY.md) |
 | Execute canary and smoke rollout | [CANARY_AND_SMOKE.md](./CANARY_AND_SMOKE.md) |
 | Use tunnel state diagnostics | [TUNNEL_STATE_DIAGNOSTICS.md](./TUNNEL_STATE_DIAGNOSTICS.md) |
@@ -235,7 +235,7 @@ For new code, prefer typed APIs listed above. Migration mapping is documented in
 
 ## Development Runner
 
-`Makefile` features are available through a Go runner at `tools/runner.go`.
+Development and validation workflow is provided through a Go runner at `tools/runner.go`.
 
 Run from `third_party/GoGRPCBridge`:
 
@@ -298,7 +298,7 @@ GOOS=js GOARCH=wasm go build ./examples/wasm-client
 
 ## Examples
 
-See the examples status catalog: [examples/README.md](./examples/README.md).
+See the examples status catalog: [examples/README.md](../examples/README.md).
 
 Canonical (`pkg/grpctunnel`) examples:
 
@@ -320,7 +320,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+MIT. See [LICENSE](../../LICENSE).
 
 ## Support
 

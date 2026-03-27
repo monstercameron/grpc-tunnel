@@ -34,6 +34,11 @@ examples/_shared/data/
 !package.json
 !package-lock.json
 
+# Local benchmark and coverage artifacts
+coverage.txt
+perf_*.out
+benchmarks.test.exe
+
 # Dependency directories
 vendor/
 node_modules/

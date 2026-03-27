@@ -63,7 +63,7 @@ Execution rule:
   - `README.md`
   - `QUALITY_GATES.md`
   - `ROADMAP_TO_10S.md`
-  - `Makefile`
+  - `tools/runner.go`
   - `tools/runner.go`
   - `PROFESSIONAL_RUBRIC.md`
 - Validation run:

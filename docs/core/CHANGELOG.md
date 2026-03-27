@@ -14,6 +14,21 @@ The format is based on Keep a Changelog and this project follows semantic versio
 - `b37d222` feat: advance GoGRPCBridge dev-to-prod readiness
 - `7206dd4` chore: group current submodule updates
 
+### Changed
+
+- Reorganized repository docs into `docs/core`, `docs/examples`, `docs/benchmarks`, and `docs/observability`, and updated `docs/catalog.json` + docs portal path resolution accordingly.
+- Added root GitHub-facing wrapper files (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`) that point to canonical docs under `docs/`.
+- Removed stale `Makefile` references from docs and removed `Makefile` from the repository in favor of the Go runner workflow (`go run ./tools/runner.go ...`).
+- Expanded ignore coverage for local benchmark and coverage artifacts (`coverage.txt`, `perf_*.out`, `benchmarks.test.exe`) and cleaned generated local artifacts.
+
+## [v0.0.11] - 2026-03-27
+
+### Highlights
+
+- Canonical import path is aligned to `github.com/monstercameron/grpc-tunnel` across module metadata, examples, and documentation.
+- Release and CI canonical publish checks enforce repository/module identity and clean-consumer `go get` validation for the canonical path.
+- Release workflow canonical publish step now runs with `RUNNER_CANONICAL_GOPROXY=direct` to avoid proxy-index lag false negatives during first corrected-tag publication.
+
 ## [v0.0.10] - 2025-11-16
 
 ### Commits

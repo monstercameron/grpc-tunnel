@@ -341,7 +341,7 @@
     }
 
     function getDocsRepoPath(getDocsPath) {
-      return "third_party/GoGRPCBridge/" + getDocsPath;
+      return "third_party/GoGRPCBridge/docs/" + getDocsPath;
     }
 
     function getDocsStoredTheme() {
@@ -384,7 +384,7 @@
     }
 
     async function getDocsMarkdownByPath(getDocsPath) {
-      const getDocsResponse = await fetch("./pages/" + getDocsPath, { cache: "no-cache" });
+      const getDocsResponse = await fetch("./" + getDocsPath, { cache: "no-cache" });
       if (!getDocsResponse.ok) {
         throw new Error("Unable to fetch " + getDocsPath);
       }
@@ -499,7 +499,7 @@
             handleDocsScrollToPath(getDocsTarget.path);
           });
         } else {
-          getDocsLink.href = "./pages/" + getDocsResolvedPath;
+          getDocsLink.href = "./" + getDocsResolvedPath;
           getDocsLink.target = "_blank";
           getDocsLink.rel = "noopener noreferrer";
         }
@@ -541,7 +541,7 @@
 
       renderDocsRefs.appendChild(document.createTextNode(" | Source Markdown: "));
       const renderDocsSourceLink = document.createElement("a");
-      renderDocsSourceLink.href = "./pages/" + getDocsItem.path;
+      renderDocsSourceLink.href = "./" + getDocsItem.path;
       renderDocsSourceLink.textContent = getDocsItem.path;
       renderDocsSourceLink.target = "_blank";
       renderDocsSourceLink.rel = "noopener noreferrer";

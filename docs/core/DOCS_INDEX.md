@@ -11,7 +11,7 @@ This is the fast navigation map for GoGRPCBridge docs.
 
 - Canonical API overview: [README.md Core API](./README.md#core-api-recommended)
 - Compatibility and deprecation guarantees: [API_COMPATIBILITY.md](./API_COMPATIBILITY.md)
-- Examples catalog status: [examples/README.md](./examples/README.md)
+- Examples catalog status: [examples/README.md](../examples/README.md)
 
 ## Migration
 
