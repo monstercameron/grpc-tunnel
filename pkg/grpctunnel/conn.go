@@ -17,6 +17,7 @@ import (
 type webSocketConn struct {
 	ws         *websocket.Conn
 	reader     io.Reader
+	readMu     sync.Mutex
 	closeOnce  sync.Once
 	isClosed   atomic.Bool
 	writeMu    sync.Mutex
@@ -29,6 +30,9 @@ func newWebSocketConn(parseWs *websocket.Conn) net.Conn {
 
 // Read reads binary payload bytes from the underlying WebSocket stream.
 func (parseC *webSocketConn) Read(parseP []byte) (int, error) {
+	parseC.readMu.Lock()
+	defer parseC.readMu.Unlock()
+
 	if parseC.isClosed.Load() {
 		return 0, io.EOF
 	}

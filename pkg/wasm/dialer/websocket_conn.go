@@ -69,6 +69,8 @@ type browserWebSocketConnection struct {
 
 	queueMu sync.Mutex
 	readMu  sync.Mutex
+	// errorChannelMu serializes error-channel sends vs close to avoid send-on-closed-channel panics.
+	errorChannelMu sync.RWMutex
 
 	closeOnce sync.Once
 	isClosed  atomic.Bool
@@ -204,6 +206,11 @@ func (parseConnection *browserWebSocketConnection) storeConnectionError(parseErr
 	if parseConnection.isConnectionClosed() {
 		return
 	}
+	parseConnection.errorChannelMu.RLock()
+	defer parseConnection.errorChannelMu.RUnlock()
+	if parseConnection.isConnectionClosed() {
+		return
+	}
 
 	// Error delivery is best-effort and non-blocking so browser callbacks never
 	// stall the JS event loop.
@@ -268,7 +275,9 @@ func (parseConnection *browserWebSocketConnection) closeChannels() {
 			parseConnection.readMu.Unlock()
 		}
 
+		parseConnection.errorChannelMu.Lock()
 		close(parseConnection.incomingErrorsChannel)
+		parseConnection.errorChannelMu.Unlock()
 		parseConnection.releaseEventHandlers()
 	})
 }

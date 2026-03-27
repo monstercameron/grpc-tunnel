@@ -24,6 +24,10 @@ type webSocketConn struct {
 	// bytes directly without allocating whole-frame message buffers.
 	readStream io.Reader
 
+	// readMu serializes websocket reads because gorilla/websocket
+	// requires a single reader goroutine.
+	readMu sync.Mutex
+
 	// readBuf stores any leftover bytes from a WebSocket message that didn't
 	// fit into the caller's buffer during the last Read() call
 	readBuf []byte
@@ -100,6 +104,9 @@ func NewWebSocketConn(parseWebsocketConnection *websocket.Conn) net.Conn {
 //   - Only accepts binary WebSocket messages (returns net.ErrClosed for text messages)
 //   - Buffers any data that doesn't fit in destinationBuffer for subsequent reads
 func (parseC *webSocketConn) Read(parseDestinationBuffer []byte) (int, error) {
+	parseC.readMu.Lock()
+	defer parseC.readMu.Unlock()
+
 	if parseC.isClosed.Load() {
 		return 0, net.ErrClosed
 	}

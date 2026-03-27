@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"syscall/js"
 	"testing"
 	"time"
@@ -234,6 +235,46 @@ func TestBrowserWebSocketConnection_CloseChannelsClearsBufferedPayload(parseT *t
 	}
 	if parseConnection.readMessageBuffer != nil {
 		parseT.Fatal("closeChannels() expected readMessageBuffer to be nil")
+	}
+}
+
+// TestBrowserWebSocketConnection_StoreConnectionErrorConcurrentClose verifies close and error delivery do not panic.
+func TestBrowserWebSocketConnection_StoreConnectionErrorConcurrentClose(parseT *testing.T) {
+	for parseIteration := 0; parseIteration < 200; parseIteration++ {
+		parseSocket, parseSocketCleanup := buildDialerTestSocket(parseT, 1, nil, nil)
+		parseConnection := NewWebSocketConn(parseSocket).(*browserWebSocketConnection)
+
+		parsePanicChannel := make(chan interface{}, 2)
+		var parseWg sync.WaitGroup
+		parseWg.Add(2)
+
+		go func() {
+			defer parseWg.Done()
+			defer func() {
+				if parseRecovered := recover(); parseRecovered != nil {
+					parsePanicChannel <- parseRecovered
+				}
+			}()
+			parseConnection.storeConnectionError(io.ErrClosedPipe)
+		}()
+		go func() {
+			defer parseWg.Done()
+			defer func() {
+				if parseRecovered := recover(); parseRecovered != nil {
+					parsePanicChannel <- parseRecovered
+				}
+			}()
+			parseConnection.closeChannels()
+		}()
+
+		parseWg.Wait()
+		parseSocketCleanup()
+
+		select {
+		case parseRecovered := <-parsePanicChannel:
+			parseT.Fatalf("concurrent close/error panicked on iteration %d: %v", parseIteration, parseRecovered)
+		default:
+		}
 	}
 }
 
