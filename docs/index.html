@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GoGRPCBridge Documentation</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --getDocsBg: #f4f6fb;
+      --getDocsPanel: #ffffff;
+      --getDocsPanelSoft: #f7f9fd;
+      --getDocsBorder: #dbe1ed;
+      --getDocsText: #1b2434;
+      --getDocsMuted: #4e5d75;
+      --getDocsLink: #0a5bd7;
+      --getDocsCodeBg: #f0f3f9;
+      --getDocsButtonBg: #ffffff;
+      --getDocsButtonHover: #f2f5fb;
+      --getDocsBadgeBg: #e8f0ff;
+      --getDocsBadgeText: #194892;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --getDocsBg: #0f1420;
+      --getDocsPanel: #151d2c;
+      --getDocsPanelSoft: #1b2436;
+      --getDocsBorder: #2a354d;
+      --getDocsText: #e7edf8;
+      --getDocsMuted: #b4bfd6;
+      --getDocsLink: #8cbcff;
+      --getDocsCodeBg: #202b40;
+      --getDocsButtonBg: #1b2436;
+      --getDocsButtonHover: #202b40;
+      --getDocsBadgeBg: #243a5f;
+      --getDocsBadgeText: #d2e4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--getDocsBg);
+      color: var(--getDocsText);
+      font: 16px/1.58 "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    a {
+      color: var(--getDocsLink);
+    }
+
+    .topbar {
+      background: var(--getDocsPanel);
+      border-bottom: 1px solid var(--getDocsBorder);
+      padding: 1rem 1.25rem;
+    }
+
+    .topbar h1 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+
+    .topbar p {
+      margin: 0.45rem 0 0;
+      color: var(--getDocsMuted);
+      max-width: 78rem;
+    }
+
+    .topbarActions {
+      margin-top: 0.8rem;
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controlButton {
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 6px;
+      background: var(--getDocsButtonBg);
+      color: var(--getDocsText);
+      padding: 0.5rem 0.82rem;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .controlButton:hover,
+    .controlButton:focus {
+      background: var(--getDocsButtonHover);
+    }
+
+    .controlButton[disabled] {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .status {
+      margin: 0;
+      color: var(--getDocsMuted);
+      font-size: 0.92rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 19rem minmax(0, 1fr);
+      gap: 1rem;
+      max-width: 124rem;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .sidebar {
+      background: var(--getDocsPanel);
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 8px;
+      padding: 0.85rem;
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100vh - 2rem);
+      overflow: auto;
+    }
+
+    .sidebar h2 {
+      margin: 0 0 0.62rem;
+      font-size: 1rem;
+    }
+
+    .sidebarFilter {
+      width: 100%;
+      padding: 0.48rem 0.58rem;
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 6px;
+      background: var(--getDocsPanelSoft);
+      color: var(--getDocsText);
+      font: inherit;
+      margin-bottom: 0.65rem;
+    }
+
+    .sidebarSection + .sidebarSection {
+      margin-top: 0.92rem;
+      border-top: 1px solid var(--getDocsBorder);
+      padding-top: 0.78rem;
+    }
+
+    .sidebarSectionTitle {
+      margin: 0 0 0.45rem;
+      color: var(--getDocsMuted);
+      font-size: 0.83rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .sidebarList {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .sidebarListItem + .sidebarListItem {
+      margin-top: 0.33rem;
+    }
+
+    .sidebarLink {
+      text-decoration: none;
+      font-size: 0.93rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .sidebarLink:hover,
+    .sidebarLink:focus {
+      text-decoration: underline;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .docCard {
+      background: var(--getDocsPanel);
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 8px;
+      padding: 1.05rem 1.2rem;
+      overflow: hidden;
+    }
+
+    .docCard + .docCard {
+      margin-top: 0.95rem;
+    }
+
+    .docHead h2 {
+      margin: 0;
+      font-size: 1.17rem;
+      line-height: 1.33;
+    }
+
+    .docMeta {
+      margin-top: 0.25rem;
+      color: var(--getDocsMuted);
+      font-size: 0.86rem;
+    }
+
+    .docBadge {
+      display: inline-block;
+      margin-top: 0.54rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      background: var(--getDocsBadgeBg);
+      color: var(--getDocsBadgeText);
+      font-size: 0.77rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .docRefs {
+      margin-top: 0.7rem;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 6px;
+      background: var(--getDocsPanelSoft);
+      font-size: 0.88rem;
+      color: var(--getDocsMuted);
+      word-break: break-word;
+    }
+
+    .docRefs code {
+      background: var(--getDocsCodeBg);
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 4px;
+      padding: 0.08rem 0.28rem;
+      margin: 0 0.24rem;
+      font-family: Consolas, "Courier New", monospace;
+      color: var(--getDocsText);
+    }
+
+    .docBody {
+      margin-top: 0.95rem;
+    }
+
+    .docBody h1,
+    .docBody h2,
+    .docBody h3,
+    .docBody h4,
+    .docBody h5 {
+      margin-top: 1.06em;
+      margin-bottom: 0.5em;
+      line-height: 1.32;
+    }
+
+    .docBody p,
+    .docBody li {
+      max-width: 78ch;
+    }
+
+    .docBody pre,
+    .docBody code {
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .docBody pre {
+      background: var(--getDocsCodeBg);
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 6px;
+      padding: 0.75rem;
+      overflow: auto;
+    }
+
+    .docBody :not(pre) > code {
+      background: var(--getDocsCodeBg);
+      border: 1px solid var(--getDocsBorder);
+      border-radius: 4px;
+      padding: 0.08rem 0.27rem;
+      font-size: 0.94em;
+    }
+
+    .docBody blockquote {
+      border-left: 3px solid var(--getDocsBorder);
+      margin: 0.88rem 0;
+      padding: 0.08rem 0 0.08rem 0.74rem;
+      color: var(--getDocsMuted);
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>GoGRPCBridge Documentation</h1>
+    <p>
+      Public documentation portal for every repository Markdown document. Each section includes direct file references to help locate the source file quickly.
+    </p>
+    <div class="topbarActions">
+      <button id="handleDocsLoadNext" class="controlButton" type="button">Load Next Batch</button>
+      <button id="handleDocsLoadAll" class="controlButton" type="button">Load All Docs</button>
+      <button id="handleDocsThemeToggle" class="controlButton" type="button">Switch To Dark Mode</button>
+      <p id="renderDocsStatus" class="status">Preparing documentation...</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Document Index</h2>
+      <input id="filterDocsInput" class="sidebarFilter" type="search" placeholder="Filter by title or path" aria-label="Filter docs">
+      <nav id="renderDocsSidebar"></nav>
+    </aside>
+    <main id="renderDocsContent" class="content"></main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script>
+    const getDocsBatchSize = 6;
+    const cacheDocsThemeKey = "gogrpcbridge-docs-theme";
+    const cacheDocsPathMap = new Map();
+    let setDocsCatalog = [];
+    let setDocsLoadedCount = 0;
+    let setDocsFilterValue = "";
+
+    function getDocsSlugFromPath(getDocsPath) {
+      return getDocsPath.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    }
+
+    function getDocsResolvePath(getDocsBasePath, getDocsLinkPath) {
+      const getDocsBaseDir = getDocsBasePath.includes("/")
+        ? getDocsBasePath.slice(0, getDocsBasePath.lastIndexOf("/") + 1)
+        : "";
+      const getDocsResolvedUrl = new URL(getDocsLinkPath, "https://docs.local/" + getDocsBaseDir);
+      return getDocsResolvedUrl.pathname.replace(/^\/+/, "");
+    }
+
+    function getDocsRepoPath(getDocsPath) {
+      return "third_party/GoGRPCBridge/" + getDocsPath;
+    }
+
+    function getDocsStoredTheme() {
+      try {
+        return localStorage.getItem(cacheDocsThemeKey);
+      } catch (getDocsError) {
+        return null;
+      }
+    }
+
+    function storeDocsTheme(getDocsTheme) {
+      try {
+        localStorage.setItem(cacheDocsThemeKey, getDocsTheme);
+      } catch (getDocsError) {
+      }
+    }
+
+    function getDocsPreferredTheme() {
+      const getDocsStoredValue = getDocsStoredTheme();
+      if (getDocsStoredValue === "light" || getDocsStoredValue === "dark") {
+        return getDocsStoredValue;
+      }
+      const hasDarkPreference = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return hasDarkPreference ? "dark" : "light";
+    }
+
+    function applyDocsTheme(getDocsTheme) {
+      document.documentElement.setAttribute("data-theme", getDocsTheme);
+      storeDocsTheme(getDocsTheme);
+      const handleDocsThemeButton = document.getElementById("handleDocsThemeToggle");
+      handleDocsThemeButton.textContent = getDocsTheme === "dark" ? "Switch To Light Mode" : "Switch To Dark Mode";
+    }
+
+    async function getDocsCatalogList() {
+      const getDocsResponse = await fetch("./catalog.json", { cache: "no-cache" });
+      if (!getDocsResponse.ok) {
+        throw new Error("Unable to fetch catalog.json");
+      }
+      return getDocsResponse.json();
+    }
+
+    async function getDocsMarkdownByPath(getDocsPath) {
+      const getDocsResponse = await fetch("./pages/" + getDocsPath, { cache: "no-cache" });
+      if (!getDocsResponse.ok) {
+        throw new Error("Unable to fetch " + getDocsPath);
+      }
+      return getDocsResponse.text();
+    }
+
+    function parseDocsMarkdown(getDocsMarkdown) {
+      if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+        const getDocsHtml = marked.parse(getDocsMarkdown);
+        return DOMPurify.sanitize(getDocsHtml, { USE_PROFILES: { html: true } });
+      }
+      const getDocsEscaped = getDocsMarkdown
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return "<pre>" + getDocsEscaped + "</pre>";
+    }
+
+    function renderDocsStatusText() {
+      const renderDocsStatusNode = document.getElementById("renderDocsStatus");
+      const setDocsTotalCount = setDocsCatalog.length;
+      const setDocsBatchCount = Math.ceil(setDocsLoadedCount / getDocsBatchSize);
+      const setDocsTotalBatches = Math.ceil(setDocsTotalCount / getDocsBatchSize);
+      renderDocsStatusNode.textContent = "Loaded " + setDocsLoadedCount + " of " + setDocsTotalCount + " docs (" + setDocsBatchCount + "/" + setDocsTotalBatches + " batches).";
+    }
+
+    function buildDocsGroups(getDocsList) {
+      const buildDocsGroupMap = new Map();
+      for (const getDocsItem of getDocsList) {
+        if (setDocsFilterValue) {
+          const getDocsMatchSource = (getDocsItem.title + " " + getDocsItem.path).toLowerCase();
+          if (!getDocsMatchSource.includes(setDocsFilterValue)) {
+            continue;
+          }
+        }
+        if (!buildDocsGroupMap.has(getDocsItem.section)) {
+          buildDocsGroupMap.set(getDocsItem.section, []);
+        }
+        buildDocsGroupMap.get(getDocsItem.section).push(getDocsItem);
+      }
+      return buildDocsGroupMap;
+    }
+
+    async function handleDocsScrollToPath(getDocsPath) {
+      await handleDocsLoadUntilPath(getDocsPath);
+      const getDocsTarget = document.getElementById("doc-" + getDocsSlugFromPath(getDocsPath));
+      if (getDocsTarget) {
+        getDocsTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function renderDocsSidebarLinks() {
+      const renderDocsSidebarNode = document.getElementById("renderDocsSidebar");
+      renderDocsSidebarNode.innerHTML = "";
+      const getDocsGroups = buildDocsGroups(setDocsCatalog);
+      for (const [getDocsSection, getDocsItems] of getDocsGroups.entries()) {
+        const renderDocsSection = document.createElement("section");
+        renderDocsSection.className = "sidebarSection";
+
+        const renderDocsSectionTitle = document.createElement("h3");
+        renderDocsSectionTitle.className = "sidebarSectionTitle";
+        renderDocsSectionTitle.textContent = getDocsSection;
+        renderDocsSection.appendChild(renderDocsSectionTitle);
+
+        const renderDocsList = document.createElement("ul");
+        renderDocsList.className = "sidebarList";
+
+        for (const getDocsItem of getDocsItems) {
+          const renderDocsItem = document.createElement("li");
+          renderDocsItem.className = "sidebarListItem";
+          const renderDocsLink = document.createElement("a");
+          renderDocsLink.className = "sidebarLink";
+          renderDocsLink.href = "#doc-" + getDocsSlugFromPath(getDocsItem.path);
+          renderDocsLink.textContent = getDocsItem.title;
+          renderDocsLink.addEventListener("click", function (getDocsEvent) {
+            getDocsEvent.preventDefault();
+            handleDocsScrollToPath(getDocsItem.path);
+          });
+          renderDocsItem.appendChild(renderDocsLink);
+          renderDocsList.appendChild(renderDocsItem);
+        }
+
+        renderDocsSection.appendChild(renderDocsList);
+        renderDocsSidebarNode.appendChild(renderDocsSection);
+      }
+    }
+
+    function applyDocsLinkRewrite(renderDocsNode, getDocsBasePath) {
+      const getDocsLinks = renderDocsNode.querySelectorAll("a[href]");
+      for (const getDocsLink of getDocsLinks) {
+        const getDocsHref = getDocsLink.getAttribute("href");
+        if (!getDocsHref) {
+          continue;
+        }
+        if (getDocsHref.startsWith("#") || getDocsHref.startsWith("http://") || getDocsHref.startsWith("https://") || getDocsHref.startsWith("mailto:")) {
+          continue;
+        }
+
+        const getDocsParts = getDocsHref.split("#");
+        const getDocsPathPart = getDocsParts[0];
+        if (!getDocsPathPart || !getDocsPathPart.toLowerCase().endsWith(".md")) {
+          continue;
+        }
+
+        const getDocsResolvedPath = getDocsResolvePath(getDocsBasePath, getDocsPathPart);
+        if (cacheDocsPathMap.has(getDocsResolvedPath)) {
+          const getDocsTarget = cacheDocsPathMap.get(getDocsResolvedPath);
+          const getDocsTargetSlug = getDocsSlugFromPath(getDocsTarget.path);
+          getDocsLink.href = "#doc-" + getDocsTargetSlug;
+          getDocsLink.addEventListener("click", function (getDocsEvent) {
+            getDocsEvent.preventDefault();
+            handleDocsScrollToPath(getDocsTarget.path);
+          });
+        } else {
+          getDocsLink.href = "./pages/" + getDocsResolvedPath;
+          getDocsLink.target = "_blank";
+          getDocsLink.rel = "noopener noreferrer";
+        }
+      }
+    }
+
+    async function renderDocsCard(getDocsItem) {
+      const renderDocsContentNode = document.getElementById("renderDocsContent");
+      const getDocsSlug = getDocsSlugFromPath(getDocsItem.path);
+      if (document.getElementById("doc-" + getDocsSlug)) {
+        return;
+      }
+
+      const renderDocsCardNode = document.createElement("article");
+      renderDocsCardNode.className = "docCard";
+      renderDocsCardNode.id = "doc-" + getDocsSlug;
+
+      const renderDocsHead = document.createElement("header");
+      renderDocsHead.className = "docHead";
+
+      const renderDocsTitle = document.createElement("h2");
+      renderDocsTitle.textContent = getDocsItem.title;
+
+      const renderDocsMeta = document.createElement("p");
+      renderDocsMeta.className = "docMeta";
+      renderDocsMeta.textContent = getDocsItem.path;
+
+      const renderDocsBadge = document.createElement("span");
+      renderDocsBadge.className = "docBadge";
+      renderDocsBadge.textContent = getDocsItem.section;
+
+      const renderDocsRefs = document.createElement("p");
+      renderDocsRefs.className = "docRefs";
+      renderDocsRefs.appendChild(document.createTextNode("File Reference: "));
+
+      const renderDocsRepoCode = document.createElement("code");
+      renderDocsRepoCode.textContent = getDocsRepoPath(getDocsItem.path);
+      renderDocsRefs.appendChild(renderDocsRepoCode);
+
+      renderDocsRefs.appendChild(document.createTextNode(" | Source Markdown: "));
+      const renderDocsSourceLink = document.createElement("a");
+      renderDocsSourceLink.href = "./pages/" + getDocsItem.path;
+      renderDocsSourceLink.textContent = getDocsItem.path;
+      renderDocsSourceLink.target = "_blank";
+      renderDocsSourceLink.rel = "noopener noreferrer";
+      renderDocsRefs.appendChild(renderDocsSourceLink);
+
+      renderDocsHead.appendChild(renderDocsTitle);
+      renderDocsHead.appendChild(renderDocsMeta);
+      renderDocsHead.appendChild(renderDocsBadge);
+      renderDocsHead.appendChild(renderDocsRefs);
+      renderDocsCardNode.appendChild(renderDocsHead);
+
+      const renderDocsBody = document.createElement("div");
+      renderDocsBody.className = "docBody";
+      renderDocsBody.textContent = "Loading...";
+      renderDocsCardNode.appendChild(renderDocsBody);
+      renderDocsContentNode.appendChild(renderDocsCardNode);
+
+      try {
+        const getDocsMarkdown = await getDocsMarkdownByPath(getDocsItem.path);
+        renderDocsBody.innerHTML = parseDocsMarkdown(getDocsMarkdown);
+        applyDocsLinkRewrite(renderDocsBody, getDocsItem.path);
+      } catch (getDocsError) {
+        renderDocsBody.textContent = "Unable to load this document: " + getDocsError.message;
+      }
+    }
+
+    async function renderDocsBatch() {
+      if (setDocsLoadedCount >= setDocsCatalog.length) {
+        return;
+      }
+      const setDocsNextCount = Math.min(setDocsLoadedCount + getDocsBatchSize, setDocsCatalog.length);
+      const getDocsBatch = setDocsCatalog.slice(setDocsLoadedCount, setDocsNextCount);
+      for (const getDocsItem of getDocsBatch) {
+        await renderDocsCard(getDocsItem);
+      }
+      setDocsLoadedCount = setDocsNextCount;
+      renderDocsStatusText();
+    }
+
+    async function handleDocsLoadUntilPath(getDocsTargetPath) {
+      while (!document.getElementById("doc-" + getDocsSlugFromPath(getDocsTargetPath)) && setDocsLoadedCount < setDocsCatalog.length) {
+        await renderDocsBatch();
+      }
+    }
+
+    async function handleDocsLoadAllBatches() {
+      const handleDocsLoadAllButton = document.getElementById("handleDocsLoadAll");
+      const handleDocsLoadNextButton = document.getElementById("handleDocsLoadNext");
+      handleDocsLoadAllButton.disabled = true;
+      handleDocsLoadNextButton.disabled = true;
+      try {
+        while (setDocsLoadedCount < setDocsCatalog.length) {
+          await renderDocsBatch();
+        }
+      } finally {
+        handleDocsLoadAllButton.disabled = true;
+        handleDocsLoadNextButton.disabled = true;
+        handleDocsLoadAllButton.textContent = "All Docs Loaded";
+        handleDocsLoadNextButton.textContent = "All Batches Loaded";
+      }
+    }
+
+    async function handleDocsLoadNextBatch() {
+      const handleDocsLoadAllButton = document.getElementById("handleDocsLoadAll");
+      const handleDocsLoadNextButton = document.getElementById("handleDocsLoadNext");
+      handleDocsLoadAllButton.disabled = true;
+      handleDocsLoadNextButton.disabled = true;
+      try {
+        await renderDocsBatch();
+      } finally {
+        const isDocsComplete = setDocsLoadedCount >= setDocsCatalog.length;
+        handleDocsLoadAllButton.disabled = isDocsComplete;
+        handleDocsLoadNextButton.disabled = isDocsComplete;
+        if (isDocsComplete) {
+          handleDocsLoadAllButton.textContent = "All Docs Loaded";
+          handleDocsLoadNextButton.textContent = "All Batches Loaded";
+        }
+      }
+    }
+
+    function handleDocsFilterInput(getDocsEvent) {
+      setDocsFilterValue = String(getDocsEvent.target.value || "").trim().toLowerCase();
+      renderDocsSidebarLinks();
+    }
+
+    function handleDocsThemeToggle() {
+      const getDocsCurrentTheme = document.documentElement.getAttribute("data-theme") || "light";
+      const getDocsNextTheme = getDocsCurrentTheme === "dark" ? "light" : "dark";
+      applyDocsTheme(getDocsNextTheme);
+    }
+
+    async function startDocsPage() {
+      try {
+        setDocsCatalog = await getDocsCatalogList();
+        for (const getDocsItem of setDocsCatalog) {
+          cacheDocsPathMap.set(getDocsItem.path, getDocsItem);
+        }
+        applyDocsTheme(getDocsPreferredTheme());
+        renderDocsSidebarLinks();
+        renderDocsStatusText();
+
+        document.getElementById("handleDocsLoadNext").addEventListener("click", handleDocsLoadNextBatch);
+        document.getElementById("handleDocsLoadAll").addEventListener("click", handleDocsLoadAllBatches);
+        document.getElementById("handleDocsThemeToggle").addEventListener("click", handleDocsThemeToggle);
+        document.getElementById("filterDocsInput").addEventListener("input", handleDocsFilterInput);
+
+        await handleDocsLoadAllBatches();
+      } catch (getDocsError) {
+        const renderDocsStatusNode = document.getElementById("renderDocsStatus");
+        renderDocsStatusNode.textContent = "Failed to load docs: " + getDocsError.message;
+      }
+    }
+
+    startDocsPage();
+  </script>
+</body>
+</html>

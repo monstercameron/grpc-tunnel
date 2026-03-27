@@ -34,6 +34,9 @@ type serverOptions struct {
 	onConnect               func(r *http.Request)
 	onDisconnect            func(r *http.Request)
 	shouldEnableCompression bool
+	maxActiveConnections    int
+	maxConnectionsPerClient int
+	maxUpgradesPerClient    int
 }
 
 // buildWebSocketWriteBufferPool returns a shared pool for a websocket write-buffer size.
@@ -116,6 +119,27 @@ func WithBridgeWebSocketCompression() ServerOption {
 	}
 }
 
+// WithMaxActiveConnections sets a global concurrent connection cap for websocket bridge sessions.
+func WithMaxActiveConnections(parseMax int) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.maxActiveConnections = parseMax
+	}
+}
+
+// WithMaxConnectionsPerClient sets a per-client concurrent connection cap for websocket bridge sessions.
+func WithMaxConnectionsPerClient(parseMax int) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.maxConnectionsPerClient = parseMax
+	}
+}
+
+// WithMaxUpgradesPerClientPerMinute sets a per-client websocket upgrade-attempt limit over one minute.
+func WithMaxUpgradesPerClientPerMinute(parseMax int) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.maxUpgradesPerClient = parseMax
+	}
+}
+
 // WithConnectHook sets a callback for when clients connect.
 func WithConnectHook(parseFn func(r *http.Request)) ServerOption {
 	return func(parseO *serverOptions) {
@@ -155,6 +179,15 @@ func GetBridgeConfigError(parseConfig BridgeConfig) error {
 	}
 	if parseConfig.IdleTimeout > 0 && parseConfig.PingInterval >= parseConfig.IdleTimeout {
 		return fmt.Errorf("grpctunnel: PingInterval must be less than IdleTimeout")
+	}
+	if parseConfig.MaxActiveConnections < 0 {
+		return fmt.Errorf("grpctunnel: MaxActiveConnections must be >= 0")
+	}
+	if parseConfig.MaxConnectionsPerClient < 0 {
+		return fmt.Errorf("grpctunnel: MaxConnectionsPerClient must be >= 0")
+	}
+	if parseConfig.MaxUpgradesPerClientPerMinute < 0 {
+		return fmt.Errorf("grpctunnel: MaxUpgradesPerClientPerMinute must be >= 0")
 	}
 	return nil
 }
@@ -259,14 +292,35 @@ func BuildBridgeHandler(parseGrpcServer *grpc.Server, parseConfig BridgeConfig) 
 	}
 	parseHTTP2Server := &http2.Server{}
 	parseServeH2CHandler := h2c.NewHandler(parseGrpcServer, parseHTTP2Server)
+	parseObservability := buildBridgeObservability()
+	parseAbuseGuard := buildBridgeAbuseGuard(parseConfig)
 
 	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
+		parseUpgradeStart := time.Now()
+		parseRequestContext, parseRequestSpan := parseObservability.startBridgeRequestSpan(parseR2.Context(), parseR2)
+		defer parseRequestSpan.End()
+		parseR2 = parseR2.WithContext(parseRequestContext)
+		if parseErr := parseAbuseGuard.reserveBridgeConnection(parseR2, time.Now()); parseErr != nil {
+			parseObservability.storeBridgeUpgradeFailure(parseRequestContext, time.Since(parseUpgradeStart), parseR2)
+			logGrpctunnelEvent("grpctunnel.bridge", "WARN", "ws_upgrade_rejected_abuse_control", parseR2, parseErr, "WebSocket upgrade rejected by abuse controls")
+			http.Error(parseW, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
+		defer parseAbuseGuard.clearBridgeConnection(parseR2)
+
 		// Upgrade to WebSocket
 		parseWs, parseErr := parseUpgrader.Upgrade(parseW, parseR2, nil)
 		if parseErr != nil {
+			parseObservability.storeBridgeUpgradeFailure(parseRequestContext, time.Since(parseUpgradeStart), parseR2)
 			logGrpctunnelEvent("grpctunnel.bridge", "WARN", "ws_upgrade_failed", parseR2, parseErr, "WebSocket upgrade failed")
 			return
 		}
+		parseObservability.storeBridgeUpgradeSuccess(parseRequestContext, time.Since(parseUpgradeStart), parseR2)
+		parseObservability.storeBridgeConnectionDelta(parseRequestContext, parseR2, 1)
+		defer parseObservability.storeBridgeConnectionDelta(parseRequestContext, parseR2, -1)
+		parseSessionContext, parseSessionSpan := parseObservability.startBridgeSessionSpan(parseRequestContext, parseR2)
+		defer parseSessionSpan.End()
+		parseR2 = parseR2.WithContext(parseSessionContext)
 		logGrpctunnelEvent("grpctunnel.bridge", "INFO", "ws_upgrade_succeeded", parseR2, nil, "WebSocket upgrade succeeded")
 		defer parseWs.Close()
 
@@ -341,16 +395,19 @@ func buildServerOptions(parseOpts ...ServerOption) *serverOptions {
 func Wrap(parseGrpcServer *grpc.Server, parseOpts ...ServerOption) http.Handler {
 	parseOptions := buildServerOptions(parseOpts...)
 	parseHandler, parseErr := BuildBridgeHandler(parseGrpcServer, BridgeConfig{
-		CheckOrigin:             parseOptions.checkOrigin,
-		ReadBufferSize:          parseOptions.readBufferSize,
-		WriteBufferSize:         parseOptions.writeBufferSize,
-		ReadLimitBytes:          parseOptions.readLimitBytes,
-		ShouldDisableReadLimit:  parseOptions.shouldDisableReadLimit,
-		PingInterval:            parseOptions.pingInterval,
-		IdleTimeout:             parseOptions.idleTimeout,
-		ShouldEnableCompression: parseOptions.shouldEnableCompression,
-		OnConnect:               parseOptions.onConnect,
-		OnDisconnect:            parseOptions.onDisconnect,
+		CheckOrigin:                   parseOptions.checkOrigin,
+		ReadBufferSize:                parseOptions.readBufferSize,
+		WriteBufferSize:               parseOptions.writeBufferSize,
+		ReadLimitBytes:                parseOptions.readLimitBytes,
+		ShouldDisableReadLimit:        parseOptions.shouldDisableReadLimit,
+		PingInterval:                  parseOptions.pingInterval,
+		IdleTimeout:                   parseOptions.idleTimeout,
+		ShouldEnableCompression:       parseOptions.shouldEnableCompression,
+		MaxActiveConnections:          parseOptions.maxActiveConnections,
+		MaxConnectionsPerClient:       parseOptions.maxConnectionsPerClient,
+		MaxUpgradesPerClientPerMinute: parseOptions.maxUpgradesPerClient,
+		OnConnect:                     parseOptions.onConnect,
+		OnDisconnect:                  parseOptions.onDisconnect,
 	})
 	if parseErr != nil {
 		return http.HandlerFunc(func(parseW http.ResponseWriter, parseR *http.Request) {

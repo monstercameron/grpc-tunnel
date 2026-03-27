@@ -113,6 +113,93 @@ func TestNewHandler_InvalidTargetGuard(parseT *testing.T) {
 	}
 }
 
+// TestNewHandler_RequireLoopbackBackendRejectsNonLoopback verifies strict backend policy rejects non-loopback plaintext targets.
+func TestNewHandler_RequireLoopbackBackendRejectsNonLoopback(parseT *testing.T) {
+	parseLogger := &testLogger{}
+	parseH := NewHandler(Config{
+		TargetAddress:                "203.0.113.10:50051",
+		ShouldRequireLoopbackBackend: true,
+		Logger:                       parseLogger,
+	})
+	if parseH.initErr == nil {
+		parseT.Fatal("Expected handler initialization error for non-loopback backend target")
+	}
+	if !strings.Contains(parseH.initErr.Error(), "violates backend transport policy") {
+		parseT.Fatalf("initErr = %v, want backend transport policy violation", parseH.initErr)
+	}
+
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+
+	if parseW.Code != http.StatusInternalServerError {
+		parseT.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, parseW.Code)
+	}
+	if !strings.Contains(parseW.Body.String(), "violates backend transport policy") {
+		parseT.Fatalf("Expected policy-violation response body, got %q", parseW.Body.String())
+	}
+
+	isFoundPolicyLog := false
+	for _, parseMsg := range parseLogger.messages {
+		if strings.Contains(parseMsg, "backend_transport_policy_violation") {
+			isFoundPolicyLog = true
+			break
+		}
+	}
+	if !isFoundPolicyLog {
+		parseT.Fatal("Expected backend transport policy violation log entry")
+	}
+}
+
+// TestNewHandler_RequireLoopbackBackendAllowsLoopback verifies strict backend policy allows loopback targets.
+func TestNewHandler_RequireLoopbackBackendAllowsLoopback(parseT *testing.T) {
+	parseH := NewHandler(Config{
+		TargetAddress:                "127.0.0.1:50051",
+		ShouldRequireLoopbackBackend: true,
+	})
+	if parseH.initErr != nil {
+		parseT.Fatalf("Expected no init error for loopback backend target, got %v", parseH.initErr)
+	}
+}
+
+// TestNewHandler_RejectsNegativeAbuseControlLimits verifies negative abuse-control limits are rejected.
+func TestNewHandler_RejectsNegativeAbuseControlLimits(parseT *testing.T) {
+	parseTests := []Config{
+		{TargetAddress: "localhost:50051", MaxActiveConnections: -1},
+		{TargetAddress: "localhost:50051", MaxConnectionsPerClient: -1},
+		{TargetAddress: "localhost:50051", MaxUpgradesPerClientPerMinute: -1},
+	}
+
+	for _, parseConfig := range parseTests {
+		parseHandler := NewHandler(parseConfig)
+		if parseHandler.initErr == nil {
+			parseT.Fatalf("NewHandler(%#v) expected init error for invalid abuse-control limit", parseConfig)
+		}
+	}
+}
+
+// TestServeHTTP_RejectsUpgradeWhenRateLimitExceeded verifies bridge handler returns 429 when per-client upgrade rate is exceeded.
+func TestServeHTTP_RejectsUpgradeWhenRateLimitExceeded(parseT *testing.T) {
+	parseHandler := NewHandler(Config{
+		TargetAddress:                 "localhost:50051",
+		MaxUpgradesPerClientPerMinute: 1,
+	})
+
+	parseReqOne := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseReqOne.RemoteAddr = "203.0.113.50:51000"
+	parseWOne := httptest.NewRecorder()
+	parseHandler.ServeHTTP(parseWOne, parseReqOne)
+
+	parseReqTwo := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseReqTwo.RemoteAddr = "203.0.113.50:51001"
+	parseWTwo := httptest.NewRecorder()
+	parseHandler.ServeHTTP(parseWTwo, parseReqTwo)
+
+	if parseWTwo.Code != http.StatusTooManyRequests {
+		parseT.Fatalf("second ServeHTTP() status = %d, want %d", parseWTwo.Code, http.StatusTooManyRequests)
+	}
+}
+
 // TestNewHandler_NegativeBackendDialTimeoutGuard verifies invalid backend dial timeout config is rejected.
 func TestNewHandler_NegativeBackendDialTimeoutGuard(parseT *testing.T) {
 	parseLogger := &testLogger{}

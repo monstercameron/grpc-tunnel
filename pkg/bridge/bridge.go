@@ -60,6 +60,23 @@ type Config struct {
 	// Default: 10s
 	BackendDialTimeout time.Duration
 
+	// ShouldRequireLoopbackBackend rejects handler startup when plaintext backend transport
+	// targets a non-loopback host. Enable this for production boundaries where bridge-to-backend
+	// traffic must remain local to the host network namespace.
+	ShouldRequireLoopbackBackend bool
+
+	// MaxActiveConnections limits total concurrent websocket tunnel connections.
+	// Zero disables this guard.
+	MaxActiveConnections int
+
+	// MaxConnectionsPerClient limits concurrent websocket tunnel connections per client key.
+	// Client key is derived from request remote address host. Zero disables this guard.
+	MaxConnectionsPerClient int
+
+	// MaxUpgradesPerClientPerMinute limits websocket upgrade attempts per client key over a 1-minute window.
+	// Zero disables this guard.
+	MaxUpgradesPerClientPerMinute int
+
 	// ShouldEnableCompression enables websocket per-message compression where supported.
 	ShouldEnableCompression bool
 
@@ -162,6 +179,7 @@ type Handler struct {
 	logger          Logger
 	http2Server     *http2.Server
 	serveH2CHandler http.Handler
+	abuseGuard      *handlerAbuseGuard
 	initErr         error
 }
 
@@ -201,6 +219,7 @@ func NewHandler(parseCfg Config) *Handler {
 			CheckOrigin:       parseCfg.CheckOrigin,
 			EnableCompression: parseCfg.ShouldEnableCompression,
 		},
+		abuseGuard: buildHandlerAbuseGuard(parseCfg),
 	}
 
 	if parseErr := getHandlerConfigError(parseCfg); parseErr != nil {
@@ -213,6 +232,11 @@ func NewHandler(parseCfg Config) *Handler {
 	if parseErr != nil {
 		parseH.initErr = parseErr
 		logBridgeEvent(parseH.logger, "WARN", "bridge_config_invalid", nil, parseErr, "Bridge configuration warning")
+		return parseH
+	}
+	if parseErr = getBridgeBackendTransportPolicyError(parseCfg, parseTargetURL); parseErr != nil {
+		parseH.initErr = parseErr
+		logBridgeEvent(parseH.logger, "ERROR", "backend_transport_policy_violation", nil, parseErr, "Bridge backend transport policy violation")
 		return parseH
 	}
 	if shouldWarnBridgePlaintextBackend(parseTargetURL.Hostname()) {
@@ -267,6 +291,13 @@ func (parseH *Handler) ServeHTTP(parseW http.ResponseWriter, parseR *http.Reques
 		http.Error(parseW, parseH.initErr.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	if parseErr := parseH.abuseGuard.reserveHandlerConnection(parseR, time.Now()); parseErr != nil {
+		logBridgeEvent(parseH.logger, "WARN", "ws_upgrade_rejected_abuse_control", parseR, parseErr, "WebSocket upgrade rejected by abuse controls")
+		http.Error(parseW, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return
+	}
+	defer parseH.abuseGuard.clearHandlerConnection(parseR)
 
 	// Upgrade to WebSocket
 	parseWs, parseErr := parseH.upgrader.Upgrade(parseW, parseR, nil)
@@ -370,6 +401,20 @@ func shouldWarnBridgePlaintextBackend(parseHost string) bool {
 	return true
 }
 
+// getBridgeBackendTransportPolicyError validates strict backend transport policy for non-loopback plaintext targets.
+func getBridgeBackendTransportPolicyError(parseConfig Config, parseTargetURL *url.URL) error {
+	if !parseConfig.ShouldRequireLoopbackBackend || parseTargetURL == nil {
+		return nil
+	}
+	if !shouldWarnBridgePlaintextBackend(parseTargetURL.Hostname()) {
+		return nil
+	}
+	return fmt.Errorf(
+		"bridge: TargetAddress %q violates backend transport policy; non-loopback plaintext backend targets are not allowed when ShouldRequireLoopbackBackend is true",
+		parseConfig.TargetAddress,
+	)
+}
+
 // getHandlerConfigError validates optional bridge handler websocket settings.
 func getHandlerConfigError(parseConfig Config) error {
 	if parseConfig.ReadBufferSize < 0 {
@@ -398,6 +443,15 @@ func getHandlerConfigError(parseConfig Config) error {
 	}
 	if parseConfig.IdleTimeout > 0 && parseConfig.PingInterval >= parseConfig.IdleTimeout {
 		return fmt.Errorf("bridge: PingInterval must be less than IdleTimeout")
+	}
+	if parseConfig.MaxActiveConnections < 0 {
+		return fmt.Errorf("bridge: MaxActiveConnections must be >= 0")
+	}
+	if parseConfig.MaxConnectionsPerClient < 0 {
+		return fmt.Errorf("bridge: MaxConnectionsPerClient must be >= 0")
+	}
+	if parseConfig.MaxUpgradesPerClientPerMinute < 0 {
+		return fmt.Errorf("bridge: MaxUpgradesPerClientPerMinute must be >= 0")
 	}
 	return nil
 }

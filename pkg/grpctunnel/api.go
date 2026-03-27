@@ -61,6 +61,15 @@ type BridgeConfig struct {
 	IdleTimeout time.Duration
 	// ShouldEnableCompression enables websocket per-message compression where supported.
 	ShouldEnableCompression bool
+	// MaxActiveConnections limits total concurrent websocket tunnel connections.
+	// Zero disables this guard.
+	MaxActiveConnections int
+	// MaxConnectionsPerClient limits concurrent websocket tunnel connections per client key.
+	// Client key is derived from request remote address host. Zero disables this guard.
+	MaxConnectionsPerClient int
+	// MaxUpgradesPerClientPerMinute limits websocket upgrade attempts per client key over a 1-minute window.
+	// Zero disables this guard.
+	MaxUpgradesPerClientPerMinute int
 	// OnConnect is called when a websocket client connects.
 	OnConnect func(r *http.Request)
 	// OnDisconnect is called when a websocket client disconnects.

@@ -24,6 +24,9 @@ type storeRunnerCommand struct {
 	getRunnerDescription string
 }
 
+const parseRunnerCanonicalModulePath = "github.com/monstercameron/grpc-tunnel"
+const parseRunnerCanonicalRepositoryURL = "https://github.com/monstercameron/grpc-tunnel"
+
 // main executes the repository task runner.
 func main() {
 	if handleRunnerMainError := handleRunnerMain(context.Background(), os.Args[1:]); handleRunnerMainError != nil {
@@ -134,6 +137,10 @@ func buildRunnerCommands() map[string]storeRunnerCommand {
 			handleRunnerAction:   handleRunnerQualityTrend,
 			getRunnerDescription: "Compare benchmark output against quality baseline and store trend summary",
 		},
+		"canonical-publish-check": {
+			handleRunnerAction:   handleRunnerCanonicalPublishCheck,
+			getRunnerDescription: "Verify canonical module/repository identity and clean-consumer go-get smoke",
+		},
 		"clean": {
 			handleRunnerAction:   clearRunnerArtifacts,
 			getRunnerDescription: "Clean caches and build artifacts",
@@ -214,6 +221,102 @@ func handleRunnerPreCommit(parseRunnerContext context.Context, parseRunnerRootPa
 	}
 	_, _ = fmt.Fprintln(os.Stdout, "Pre-commit checks passed.")
 	return nil
+}
+
+// handleRunnerCanonicalPublishCheck validates canonical module identity and clean-consumer go-get behavior.
+func handleRunnerCanonicalPublishCheck(parseRunnerContext context.Context, parseRunnerRootPath string) error {
+	parseGoModPath := filepath.Join(parseRunnerRootPath, "go.mod")
+	parseGoModBytes, readRunnerGoModError := os.ReadFile(parseGoModPath)
+	if readRunnerGoModError != nil {
+		return fmt.Errorf("failed to read %q: %w", parseGoModPath, readRunnerGoModError)
+	}
+
+	parseModulePath, parseModulePathError := parseRunnerGoModModulePath(string(parseGoModBytes))
+	if parseModulePathError != nil {
+		return parseModulePathError
+	}
+	if parseModulePath != parseRunnerCanonicalModulePath {
+		return fmt.Errorf(
+			"canonical publish check failed: go.mod module path %q does not match canonical %q",
+			parseModulePath,
+			parseRunnerCanonicalModulePath,
+		)
+	}
+
+	parseOriginURLOutput, parseOriginURLError := buildRunnerProcessOutput(parseRunnerContext, parseRunnerRootPath, parseRunnerRootPath, nil, "git", "remote", "get-url", "origin")
+	if parseOriginURLError != nil {
+		return parseOriginURLError
+	}
+	parseOriginURL := strings.TrimSpace(parseOriginURLOutput)
+	parseOriginURL = normalizeRunnerRepositoryURL(parseOriginURL)
+	parseCanonicalRepositoryURL := normalizeRunnerRepositoryURL(parseRunnerCanonicalRepositoryURL)
+	if parseOriginURL != parseCanonicalRepositoryURL {
+		return fmt.Errorf(
+			"canonical publish check failed: origin remote %q does not match canonical repository %q",
+			parseOriginURL,
+			parseCanonicalRepositoryURL,
+		)
+	}
+
+	if _, parseRepositoryLookupError := buildRunnerProcessOutput(parseRunnerContext, parseRunnerRootPath, parseRunnerRootPath, nil, "git", "ls-remote", parseRunnerCanonicalRepositoryURL, "HEAD"); parseRepositoryLookupError != nil {
+		return fmt.Errorf("canonical publish check failed: canonical repository is not reachable: %w", parseRepositoryLookupError)
+	}
+
+	parseSmokeDirPath, createRunnerSmokeDirError := os.MkdirTemp("", "gogrpcbridge-publish-smoke-*")
+	if createRunnerSmokeDirError != nil {
+		return fmt.Errorf("failed to create temporary smoke directory: %w", createRunnerSmokeDirError)
+	}
+	defer func() {
+		_ = os.RemoveAll(parseSmokeDirPath)
+	}()
+
+	if handleRunnerProcessError := handleRunnerProcess(parseRunnerContext, parseRunnerRootPath, parseSmokeDirPath, nil, "go", "mod", "init", "example.com/gogrpcbridge-publish-smoke"); handleRunnerProcessError != nil {
+		return handleRunnerProcessError
+	}
+	if handleRunnerProcessError := handleRunnerProcess(parseRunnerContext, parseRunnerRootPath, parseSmokeDirPath, nil, "go", "get", parseRunnerCanonicalModulePath+"@latest"); handleRunnerProcessError != nil {
+		return fmt.Errorf(
+			"canonical publish check failed: clean-consumer go get for %q failed. publish a new semver tag from %q with matching module path %q: %w",
+			parseRunnerCanonicalModulePath,
+			parseCanonicalRepositoryURL,
+			parseRunnerCanonicalModulePath,
+			handleRunnerProcessError,
+		)
+	}
+
+	parseSmokeMainPath := filepath.Join(parseSmokeDirPath, "main.go")
+	parseSmokeMainContent := "package main\n\nimport _ \"" + parseRunnerCanonicalModulePath + "/pkg/grpctunnel\"\n\nfunc main() {}\n"
+	if storeRunnerSmokeMainError := os.WriteFile(parseSmokeMainPath, []byte(parseSmokeMainContent), 0o644); storeRunnerSmokeMainError != nil {
+		return fmt.Errorf("failed to write smoke main file %q: %w", parseSmokeMainPath, storeRunnerSmokeMainError)
+	}
+
+	if handleRunnerProcessError := handleRunnerProcess(parseRunnerContext, parseRunnerRootPath, parseSmokeDirPath, nil, "go", "build", "."); handleRunnerProcessError != nil {
+		return fmt.Errorf("canonical publish check failed: clean-consumer compile smoke failed: %w", handleRunnerProcessError)
+	}
+
+	_, _ = fmt.Fprintln(os.Stdout, "canonical publish check passed")
+	return nil
+}
+
+// parseRunnerGoModModulePath parses go.mod content and returns the declared module path.
+func parseRunnerGoModModulePath(parseGoModContent string) (string, error) {
+	parseModulePattern := regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
+	parseModuleMatch := parseModulePattern.FindStringSubmatch(parseGoModContent)
+	if len(parseModuleMatch) != 2 {
+		return "", fmt.Errorf("failed to parse module path from go.mod")
+	}
+	return strings.TrimSpace(parseModuleMatch[1]), nil
+}
+
+// normalizeRunnerRepositoryURL normalizes Git repository URLs across HTTPS and SSH forms.
+func normalizeRunnerRepositoryURL(parseRepositoryURL string) string {
+	parseRepositoryURL = strings.TrimSpace(parseRepositoryURL)
+	parseRepositoryURL = strings.TrimSuffix(parseRepositoryURL, ".git")
+
+	parseSSHPrefix := "git@github.com:"
+	if strings.HasPrefix(parseRepositoryURL, parseSSHPrefix) {
+		parseRepositoryURL = "https://github.com/" + strings.TrimPrefix(parseRepositoryURL, parseSSHPrefix)
+	}
+	return parseRepositoryURL
 }
 
 // applyRunnerInstallHooks ensures the pre-commit hook is executable where supported.

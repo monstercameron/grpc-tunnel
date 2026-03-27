@@ -62,6 +62,12 @@ jobs:
         env:
           RUNNER_STRICT_RACE: "1"
 
+      - name: Run canonical publish identity check
+        run: go run ./tools/runner.go canonical-publish-check
+
+      - name: Run API governance guard
+        run: go run ./tools/api_compat_guard check
+
       - name: Run release benchmark trend gate
         run: go run ./tools/runner.go quality-trend
 

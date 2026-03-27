@@ -1,0 +1,38 @@
+groups:
+  - name: gogrpcbridge-observability
+    rules:
+      - alert: GoGRPCBridgeUpgradeFailuresHigh
+        expr: sum(rate(bridge_upgrade_failures_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: page
+          service: gogrpcbridge
+        annotations:
+          summary: GoGRPCBridge websocket upgrade failures are elevated
+          description: >
+            bridge_upgrade_failures_total is above 1 failure/second for at least 10 minutes.
+            Check ingress, origin policy, and websocket proxy compatibility.
+
+      - alert: GoGRPCBridgeUpgradeLatencyP95High
+        expr: histogram_quantile(0.95, sum(rate(bridge_request_latency_ms_bucket[5m])) by (le)) > 250
+        for: 15m
+        labels:
+          severity: warning
+          service: gogrpcbridge
+        annotations:
+          summary: GoGRPCBridge upgrade latency p95 is high
+          description: >
+            bridge_request_latency_ms p95 is above 250ms for at least 15 minutes.
+            Check TLS termination, load balancer websocket handling, and backend saturation.
+
+      - alert: GoGRPCBridgeConnectionsCollapsed
+        expr: sum(bridge_connections_active) < 1
+        for: 15m
+        labels:
+          severity: warning
+          service: gogrpcbridge
+        annotations:
+          summary: GoGRPCBridge active connections collapsed
+          description: >
+            bridge_connections_active is below 1 for 15 minutes.
+            Confirm client connectivity, route health, and service readiness.
