@@ -7,9 +7,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: gogrpcbridge-auto-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  auto-release-guard:
+    name: Auto Release Guard
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Warn when push-based auto release is disabled
+      run: |
+        if [ "${{ github.event_name }}" = "push" ] && [ "${{ vars.GOGRPCBRIDGE_ENABLE_AUTO_RELEASE }}" != "true" ]; then
+          echo "::warning::Push-triggered auto release is disabled. Set repo variable GOGRPCBRIDGE_ENABLE_AUTO_RELEASE=true to enable it."
+        fi
+
   # Run tests first - only release if they pass
   test:
     uses: ./.github/workflows/test.yml
@@ -17,7 +32,12 @@ jobs:
   auto-release:
     name: Auto Increment Release
     runs-on: ubuntu-latest
-    needs: test  # Only run if tests pass
+    needs:
+      - auto-release-guard
+      - test  # Only run if tests pass
+    if: github.event_name == 'workflow_dispatch' || vars.GOGRPCBRIDGE_ENABLE_AUTO_RELEASE == 'true'
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout code

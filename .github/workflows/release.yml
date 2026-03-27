@@ -6,12 +6,18 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  GOSEC_VERSION: v2.25.0
+  GOVULNCHECK_VERSION: v1.1.4
 
 jobs:
   release:
     name: Build and Publish Release Assets
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     environment:
       name: gogrpcbridge-release
 
@@ -61,8 +67,9 @@ jobs:
 
       - name: Run release security gates
         run: |
-          go run github.com/securego/gosec/v2/cmd/gosec@latest -severity high -confidence high -exclude G103 ./...
-          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+          go run github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} -severity high -confidence high -exclude G103 ./...
+          go run github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION} -severity high -confidence high -include G103 ./pkg/... ./examples/... ./e2e/... ./tools/...
+          go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} ./...
 
       - name: Upload release gate artifacts
         if: always()
