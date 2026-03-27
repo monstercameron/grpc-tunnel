@@ -6,6 +6,7 @@ Use this checklist before creating a release tag.
 
 - [ ] `go run ./tools/runner.go quality` passed on release commit.
 - [ ] Security scan completed with no high-severity/high-confidence findings.
+- [ ] Deep fuzz workflow completed per `SECURITY_FUZZ_PROCESS.md`.
 - [ ] Browser lane and e2e lane passed for release candidate.
 
 ## Dependency and Supply Chain
