@@ -18,7 +18,8 @@ type ServerConfig struct {
 	// GRPCServer is the gRPC server to serve over WebSocket
 	GRPCServer *grpc.Server
 
-	// CheckOrigin validates WebSocket origins (nil = allow all)
+	// CheckOrigin validates websocket upgrade origins.
+	// If nil, gorilla/websocket applies its default same-origin policy.
 	CheckOrigin func(r *http.Request) bool
 
 	// ReadBufferSize for WebSocket (default: 4096)
@@ -49,20 +50,20 @@ type ServerConfig struct {
 func ServeHandler(parseCfg ServerConfig) http.Handler {
 	// Set defaults
 	if parseCfg.ReadBufferSize == 0 {
-		parseCfg.ReadBufferSize = 4096
+		parseCfg.ReadBufferSize = parseDefaultWebSocketBufferSize
 	}
 	if parseCfg.WriteBufferSize == 0 {
-		parseCfg.WriteBufferSize = 4096
-	}
-	if parseCfg.CheckOrigin == nil {
-		parseCfg.CheckOrigin = func(parseR *http.Request) bool { return true }
+		parseCfg.WriteBufferSize = parseDefaultWebSocketBufferSize
 	}
 
 	parseUpgrader := websocket.Upgrader{
 		ReadBufferSize:  parseCfg.ReadBufferSize,
 		WriteBufferSize: parseCfg.WriteBufferSize,
+		WriteBufferPool: buildWebSocketWriteBufferPool(parseCfg.WriteBufferSize),
 		CheckOrigin:     parseCfg.CheckOrigin,
 	}
+	parseHTTP2Server := &http2.Server{}
+	parseServeH2CHandler := h2c.NewHandler(parseCfg.GRPCServer, parseHTTP2Server)
 
 	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
 		// Upgrade to WebSocket
@@ -87,9 +88,8 @@ func ServeHandler(parseCfg ServerConfig) http.Handler {
 		defer parseConn.Close()
 
 		// Serve gRPC over HTTP/2 on the WebSocket connection
-		parseH2Server := &http2.Server{}
-		parseH2Server.ServeConn(parseConn, &http2.ServeConnOpts{
-			Handler: h2c.NewHandler(parseCfg.GRPCServer, parseH2Server),
+		parseHTTP2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+			Handler: parseServeH2CHandler,
 		})
 	})
 }

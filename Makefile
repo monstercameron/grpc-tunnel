@@ -1,63 +1,51 @@
-.PHONY: help test lint fmt check pre-commit install-hooks clean
+.PHONY: help test test-short fmt lint lint-fix check pre-commit install-hooks fuzz fuzz-quick e2e build quality quality-baseline clean
 
-help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo ''
-	@echo 'Available targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+RUNNER=go run ./tools/runner.go
+
+help: ## Show available targets
+	@$(RUNNER) help
 
 test: ## Run all tests
-	go test ./pkg/... -v -race -coverprofile=coverage.txt
+	@$(RUNNER) test
 
 test-short: ## Run tests without race detector
-	go test ./pkg/... -short
+	@$(RUNNER) test-short
 
 fmt: ## Format all Go code
-	gofmt -w -s .
-	goimports -w .
+	@$(RUNNER) fmt
 
 lint: ## Run linter
-	golangci-lint run --config=.golangci.yml ./...
+	@$(RUNNER) lint
 
 lint-fix: ## Run linter and auto-fix issues
-	golangci-lint run --config=.golangci.yml --fix ./...
+	@$(RUNNER) lint-fix
 
-check: fmt lint test-short ## Run format, lint, and quick tests (pre-commit check)
+check: ## Run format, lint, and quick tests
+	@$(RUNNER) check
 
-pre-commit: check ## Same as check - run before committing
-	@echo "✅ Pre-commit checks passed!"
+pre-commit: ## Same as check - run before committing
+	@$(RUNNER) pre-commit
 
 install-hooks: ## Install git pre-commit hooks
-	chmod +x .git/hooks/pre-commit
-	@echo "✅ Pre-commit hooks installed"
+	@$(RUNNER) install-hooks
 
 fuzz: ## Run fuzz tests for 1 minute each
-	@echo "Running FuzzWebSocketConnWrite..."
-	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=60s
-	@echo "Running FuzzWebSocketConnRead..."
-	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnRead -fuzztime=60s
-	@echo "Running FuzzBinaryMessage..."
-	go test ./pkg/bridge -v -fuzz=FuzzBinaryMessage -fuzztime=60s
-	@echo "Running FuzzMessageSizes..."
-	go test ./pkg/bridge -v -fuzz=FuzzMessageSizes -fuzztime=60s
+	@$(RUNNER) fuzz
 
 fuzz-quick: ## Run fuzz tests quickly (5s each) for CI/validation
-	@echo "Quick fuzz validation..."
-	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=5s
-	go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnRead -fuzztime=5s
-	go test ./pkg/bridge -v -fuzz=FuzzBinaryMessage -fuzztime=5s
-	go test ./pkg/bridge -v -fuzz=FuzzMessageSizes -fuzztime=5s
+	@$(RUNNER) fuzz-quick
 
 e2e: ## Run end-to-end tests
-	go test ./e2e/... -v -timeout 5m
+	@$(RUNNER) e2e
 
 build: ## Build example binaries
-	go build -v ./examples/direct-bridge
-	go build -v ./examples/grpc-server
-	cd examples/wasm-client && GOOS=js GOARCH=wasm go build -v .
+	@$(RUNNER) build
+
+quality: ## Run enforceable quality gates
+	@$(RUNNER) quality
+
+quality-baseline: ## Capture benchmark baseline snapshot
+	@$(RUNNER) quality-baseline
 
 clean: ## Clean build artifacts and caches
-	go clean -cache -testcache -modcache
-	rm -f coverage.txt
-	rm -f direct-bridge grpc-server
-	rm -f examples/wasm-client/main.wasm
+	@$(RUNNER) clean

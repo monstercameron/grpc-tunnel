@@ -38,8 +38,18 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
-    - name: Run unit tests
-      run: go test ./pkg/... -v -race -coverprofile=coverage-unit.txt -covermode=atomic
+    - name: Run quality gates
+      run: go run ./tools/runner.go quality
+      env:
+        RUNNER_STRICT_RACE: "1"
+
+    - name: Upload quality gate summary
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-gate-summary-go${{ matrix.go-version }}
+        path: ./bin/quality/summary.json
+        if-no-files-found: ignore
 
     - name: Run edge case tests
       run: go test ./pkg/... -v -run "Edge|Mock" -timeout 2m
@@ -68,7 +78,7 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
-        files: ./coverage-unit.txt
+        files: ./coverage.txt
         flags: unittests
         name: codecov-ubuntu-go${{ matrix.go-version }}
 

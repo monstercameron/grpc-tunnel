@@ -1,8 +1,10 @@
 package bridge
 
 import (
+	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -18,26 +20,34 @@ type webSocketConn struct {
 	// websocket is the underlying WebSocket connection from gorilla/websocket
 	websocket *websocket.Conn
 
+	// readStream stores the active WebSocket frame reader so Read can stream
+	// bytes directly without allocating whole-frame message buffers.
+	readStream io.Reader
+
 	// readBuf stores any leftover bytes from a WebSocket message that didn't
 	// fit into the caller's buffer during the last Read() call
 	readBuf []byte
 
-	// readDeadline is the deadline for read operations
-	// Note: WebSocket deadlines are not fully implemented in this adapter
+	// readDeadline is the deadline for read operations and mirrors the
+	// deadline set on the underlying WebSocket connection.
 	readDeadline time.Time
 
 	// writeDeadline is the deadline for write operations
-	// Note: WebSocket deadlines are not fully implemented in this adapter
+	// and mirrors the deadline set on the underlying WebSocket connection.
 	writeDeadline time.Time
+
+	// deadlineMu serializes deadline updates to the underlying websocket.
+	deadlineMu sync.Mutex
 
 	// closeOnce ensures Close() is called only once
 	closeOnce sync.Once
 
-	// closed tracks whether the connection has been closed
-	closed bool
+	// isClosed tracks whether the connection has been closed.
+	isClosed atomic.Bool
 
-	// closedMu protects the closed flag
-	closedMu sync.RWMutex
+	// writeMu serializes websocket writes because gorilla/websocket
+	// panics when multiple goroutines write concurrently.
+	writeMu sync.Mutex
 }
 
 // NewWebSocketConn wraps a WebSocket connection as a net.Conn.
@@ -62,7 +72,11 @@ type webSocketConn struct {
 //	conn := bridge.NewWebSocketConn(websocketConnection)
 //	// Use conn with gRPC or any code expecting net.Conn
 func NewWebSocketConn(parseWebsocketConnection *websocket.Conn) net.Conn {
-	return &webSocketConn{websocket: parseWebsocketConnection}
+	parseConnection := &webSocketConn{websocket: parseWebsocketConnection}
+	if parseWebsocketConnection == nil {
+		parseConnection.isClosed.Store(true)
+	}
+	return parseConnection
 }
 
 // Read reads data from the WebSocket connection into p.
@@ -86,45 +100,42 @@ func NewWebSocketConn(parseWebsocketConnection *websocket.Conn) net.Conn {
 //   - Only accepts binary WebSocket messages (returns net.ErrClosed for text messages)
 //   - Buffers any data that doesn't fit in destinationBuffer for subsequent reads
 func (parseC *webSocketConn) Read(parseDestinationBuffer []byte) (int, error) {
-	// Check if connection is closed
-	parseC.closedMu.RLock()
-	isClosed := parseC.closed
-	parseC.closedMu.RUnlock()
-
-	if isClosed {
+	if parseC.isClosed.Load() {
+		return 0, net.ErrClosed
+	}
+	if parseC.websocket == nil {
 		return 0, net.ErrClosed
 	}
 
-	// If we have buffered data from a previous read, return that first.
-	// This happens when a WebSocket message was larger than the caller's buffer.
-	if len(parseC.readBuf) > 0 {
-		parseBytesRead := copy(parseDestinationBuffer, parseC.readBuf)
-		// Keep any remaining buffered data for the next Read() call
-		parseC.readBuf = parseC.readBuf[parseBytesRead:]
-		return parseBytesRead, nil
-	}
+	for {
+		if parseC.readStream == nil {
+			// Stream the next frame directly instead of materializing the full
+			// message in memory with ReadMessage().
+			parseMessageType, parseFrameReader, parseErr := parseC.websocket.NextReader()
+			if parseErr != nil {
+				// WebSocket errors (connection closed, network errors, etc.)
+				return 0, parseErr
+			}
 
-	// Read the next complete WebSocket message frame
-	parseMessageType, parseMessageData, parseErr := parseC.websocket.ReadMessage()
-	if parseErr != nil {
-		// WebSocket errors (connection closed, network errors, etc.)
-		return 0, parseErr
-	}
+			// gRPC sends data as binary, so we only accept binary WebSocket messages.
+			// Text messages indicate a protocol violation.
+			if parseMessageType != websocket.BinaryMessage {
+				return 0, net.ErrClosed
+			}
+			parseC.readStream = parseFrameReader
+		}
 
-	// gRPC sends data as binary, so we only accept binary WebSocket messages.
-	// Text messages indicate a protocol violation.
-	if parseMessageType != websocket.BinaryMessage {
-		return 0, net.ErrClosed
+		parseBytesRead, parseErr := parseC.readStream.Read(parseDestinationBuffer)
+		if parseErr == io.EOF {
+			parseC.readStream = nil
+			if parseBytesRead > 0 {
+				return parseBytesRead, nil
+			}
+			// Empty frame: continue to the next frame.
+			continue
+		}
+		return parseBytesRead, parseErr
 	}
-
-	// Copy as much data as possible into the caller's buffer
-	parseBytesRead2 := copy(parseDestinationBuffer, parseMessageData)
-	// If the WebSocket message doesn't fit entirely in destinationBuffer,
-	// save the remainder for the next Read() call
-	if parseBytesRead2 < len(parseMessageData) {
-		parseC.readBuf = parseMessageData[parseBytesRead2:]
-	}
-	return parseBytesRead2, nil
 }
 
 // Write writes data from p to the WebSocket connection.
@@ -143,12 +154,13 @@ func (parseC *webSocketConn) Read(parseDestinationBuffer []byte) (int, error) {
 // Note: Unlike traditional TCP sockets, WebSocket writes are atomic -
 // either the entire message is sent or none of it is.
 func (parseC *webSocketConn) Write(parseSourceData []byte) (int, error) {
-	// Check if connection is closed
-	parseC.closedMu.RLock()
-	isClosed := parseC.closed
-	parseC.closedMu.RUnlock()
+	parseC.writeMu.Lock()
+	defer parseC.writeMu.Unlock()
 
-	if isClosed {
+	if parseC.isClosed.Load() {
+		return 0, net.ErrClosed
+	}
+	if parseC.websocket == nil {
 		return 0, net.ErrClosed
 	}
 
@@ -173,10 +185,10 @@ func (parseC *webSocketConn) Write(parseSourceData []byte) (int, error) {
 func (parseC *webSocketConn) Close() error {
 	var parseCloseErr error
 	parseC.closeOnce.Do(func() {
-		parseC.closedMu.Lock()
-		parseC.closed = true
-		parseC.closedMu.Unlock()
-
+		parseC.isClosed.Store(true)
+		if parseC.websocket == nil {
+			return
+		}
 		parseCloseErr = parseC.websocket.Close()
 	})
 	return parseCloseErr
@@ -188,6 +200,9 @@ func (parseC *webSocketConn) Close() error {
 // Returns:
 //   - The local address of the underlying WebSocket connection
 func (parseC *webSocketConn) LocalAddr() net.Addr {
+	if parseC.websocket == nil {
+		return nil
+	}
 	return parseC.websocket.LocalAddr()
 }
 
@@ -197,57 +212,71 @@ func (parseC *webSocketConn) LocalAddr() net.Addr {
 // Returns:
 //   - The remote address of the underlying WebSocket connection
 func (parseC *webSocketConn) RemoteAddr() net.Addr {
+	if parseC.websocket == nil {
+		return nil
+	}
 	return parseC.websocket.RemoteAddr()
 }
 
 // SetDeadline sets the read and write deadlines for the connection.
 // It implements the net.Conn SetDeadline method.
 //
-// Note: This implementation stores the deadline values but does not
-// currently enforce them. WebSocket deadline enforcement would require
-// additional complexity with goroutines and timers.
-//
 // Parameters:
 //   - deadline: The deadline time for both read and write operations
 //
 // Returns:
-//   - Always returns nil (no errors)
+//   - Any error from the underlying WebSocket deadline setters
 func (parseC *webSocketConn) SetDeadline(parseDeadline time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+
 	parseC.readDeadline = parseDeadline
 	parseC.writeDeadline = parseDeadline
-	return nil
+
+	if parseC.websocket == nil {
+		return net.ErrClosed
+	}
+
+	if parseErr := parseC.websocket.SetReadDeadline(parseDeadline); parseErr != nil {
+		return parseErr
+	}
+	return parseC.websocket.SetWriteDeadline(parseDeadline)
 }
 
 // SetReadDeadline sets the deadline for read operations.
 // It implements the net.Conn SetReadDeadline method.
 //
-// Note: This implementation stores the deadline value but does not
-// currently enforce it. WebSocket deadline enforcement would require
-// additional complexity with goroutines and timers.
-//
 // Parameters:
 //   - deadline: The deadline time for read operations
 //
 // Returns:
-//   - Always returns nil (no errors)
+//   - Any error from the underlying WebSocket read deadline setter
 func (parseC *webSocketConn) SetReadDeadline(parseDeadline time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+
 	parseC.readDeadline = parseDeadline
-	return nil
+	if parseC.websocket == nil {
+		return net.ErrClosed
+	}
+	return parseC.websocket.SetReadDeadline(parseDeadline)
 }
 
 // SetWriteDeadline sets the deadline for write operations.
 // It implements the net.Conn SetWriteDeadline method.
 //
-// Note: This implementation stores the deadline value but does not
-// currently enforce it. WebSocket deadline enforcement would require
-// additional complexity with goroutines and timers.
-//
 // Parameters:
 //   - deadline: The deadline time for write operations
 //
 // Returns:
-//   - Always returns nil (no errors)
+//   - Any error from the underlying WebSocket write deadline setter
 func (parseC *webSocketConn) SetWriteDeadline(parseDeadline time.Time) error {
+	parseC.deadlineMu.Lock()
+	defer parseC.deadlineMu.Unlock()
+
 	parseC.writeDeadline = parseDeadline
-	return nil
+	if parseC.websocket == nil {
+		return net.ErrClosed
+	}
+	return parseC.websocket.SetWriteDeadline(parseDeadline)
 }

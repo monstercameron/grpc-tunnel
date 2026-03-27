@@ -3,102 +3,106 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Create Release
+    name: Build and Publish Release Assets
     runs-on: ubuntu-latest
-    
+    environment:
+      name: gogrpcbridge-release
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24.x'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
 
-    - name: Get version from tag
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Resolve release version
+        id: version
+        run: echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-    - name: Build release binaries
-      run: |
-        # Create output directory
-        mkdir -p dist
-        
-        # Build examples for Linux (library is platform-agnostic)
-        echo "Building examples..."
-        
-        go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
-          -o "dist/grpc-tunnel-bridge" ./examples/direct-bridge
-        
-        go build -ldflags="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }}" \
-          -o "dist/grpc-tunnel-server" ./examples/grpc-server
-        
-        # Build WASM client
-        cd examples/wasm-client
-        GOOS=js GOARCH=wasm go build -o ../../dist/main.wasm .
-        cd ../..
-        
-        # Create archives
-        cd dist
-        tar czf GoGRPCBridge-examples.tar.gz GoGRPCBridge-bridge GoGRPCBridge-server
-        tar czf GoGRPCBridge-wasm.tar.gz main.wasm
+      - name: Validate changelog entry exists for tag
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "Missing CHANGELOG section for $VERSION"
+            exit 1
+          fi
 
-    - name: Generate changelog
-      id: changelog
-      run: |
-        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-        git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+      - name: Extract changelog notes for tag
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          awk '
+            $0 ~ "^## \\[" version "\\]" { capture=1; next }
+            $0 ~ "^## \\[" && capture { capture=0 }
+            capture { print }
+          ' version="$VERSION" CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "No release notes extracted for $VERSION"
+            exit 1
+          fi
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: Release ${{ steps.get_version.outputs.VERSION }}
-        body: |
-          ## Changes
-          ${{ steps.changelog.outputs.CHANGELOG }}
-          
-          ## Installation
-          
-          This is a **Go library** for gRPC-over-WebSocket. Import it in your project:
-          
-          ```go
-          import "github.com/monstercameron/grpc-tunnel/pkg/bridge"
-          ```
-          
-          ### Example Binaries (Linux)
-          
-          Download example implementations:
-          
-          ```bash
-          # Download and extract examples
-          tar xzf grpc-tunnel-examples.tar.gz
-          
-          # Run bridge server
-          ./grpc-tunnel-bridge
-          
-          # Run gRPC server
-          ./grpc-tunnel-server
-          ```
-          
-          ### WASM Client Example
-          ```bash
-          tar xzf grpc-tunnel-wasm.tar.gz
-          # Deploy main.wasm with your web application
-          ```
-        files: |
-          dist/*.tar.gz
-        draft: false
-        prerelease: false
+      - name: Run release quality gate
+        run: go run ./tools/runner.go quality
+        env:
+          RUNNER_STRICT_RACE: "1"
 
-  # Skipping Docker release - no Dockerfiles present in repository
-  # Add Dockerfiles if needed for containerized deployments
+      - name: Run release benchmark trend gate
+        run: go run ./tools/runner.go quality-trend
+
+      - name: Run release security gates
+        run: |
+          go run github.com/securego/gosec/v2/cmd/gosec@latest -severity high -confidence high -exclude G103 ./...
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Upload release gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-artifacts-${{ steps.version.outputs.value }}
+          path: |
+            ./bin/quality/summary.json
+            ./bin/quality/trend.json
+          if-no-files-found: error
+
+      - name: Compile verification gate
+        run: go test ./... -run '^$'
+
+      - name: Build release artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          mkdir -p dist
+
+          go build -trimpath -ldflags="-s -w" \
+            -o "dist/GoGRPCBridge-bridge-${VERSION}-linux-amd64" ./examples/direct-bridge
+
+          go build -trimpath -ldflags="-s -w" \
+            -o "dist/GoGRPCBridge-grpc-server-${VERSION}-linux-amd64" ./examples/grpc-server
+
+          GOOS=js GOARCH=wasm go build -trimpath \
+            -o "dist/GoGRPCBridge-wasm-client-${VERSION}.wasm" ./examples/wasm-client
+
+          tar -czf "dist/GoGRPCBridge-examples-${VERSION}-linux-amd64.tar.gz" \
+            -C dist "GoGRPCBridge-bridge-${VERSION}-linux-amd64" "GoGRPCBridge-grpc-server-${VERSION}-linux-amd64"
+
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.value }}
+          name: Release ${{ steps.version.outputs.value }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            dist/*
+          draft: false
+          prerelease: false

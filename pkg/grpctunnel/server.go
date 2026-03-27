@@ -3,8 +3,10 @@
 package grpctunnel
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,19 +15,64 @@ import (
 	"google.golang.org/grpc"
 )
 
+const parseDefaultWebSocketBufferSize = 4096
+const parseDefaultReadLimitBytes int64 = 16 << 20
+
+var cacheWebSocketWriteBufferPools sync.Map
+
 // ServerOption configures the WebSocket server behavior.
 type ServerOption func(*serverOptions)
 
 type serverOptions struct {
-	checkOrigin     func(r *http.Request) bool
-	readBufferSize  int
-	writeBufferSize int
-	onConnect       func(r *http.Request)
-	onDisconnect    func(r *http.Request)
+	checkOrigin             func(r *http.Request) bool
+	readBufferSize          int
+	writeBufferSize         int
+	readLimitBytes          int64
+	shouldDisableReadLimit  bool
+	pingInterval            time.Duration
+	idleTimeout             time.Duration
+	onConnect               func(r *http.Request)
+	onDisconnect            func(r *http.Request)
+	shouldEnableCompression bool
+}
+
+// buildWebSocketWriteBufferPool returns a shared pool for a websocket write-buffer size.
+func buildWebSocketWriteBufferPool(parseBufferSize int) *sync.Pool {
+	if parseBufferSize <= 0 {
+		parseBufferSize = parseDefaultWebSocketBufferSize
+	}
+	if !isCacheableWebSocketWriteBufferSize(parseBufferSize) {
+		return &sync.Pool{}
+	}
+	parseCachedPool, isFoundPool := cacheWebSocketWriteBufferPools.Load(parseBufferSize)
+	if isFoundPool {
+		parsePool, parseOK := parseCachedPool.(*sync.Pool)
+		if parseOK {
+			return parsePool
+		}
+	}
+
+	parsePool := &sync.Pool{}
+	parseStoredPool, _ := cacheWebSocketWriteBufferPools.LoadOrStore(parseBufferSize, parsePool)
+	parseTypedPool, parseOK := parseStoredPool.(*sync.Pool)
+	if parseOK {
+		return parseTypedPool
+	}
+	return parsePool
+}
+
+// isCacheableWebSocketWriteBufferSize reports whether a buffer size should use the global shared pool cache.
+func isCacheableWebSocketWriteBufferSize(parseBufferSize int) bool {
+	switch parseBufferSize {
+	case parseDefaultWebSocketBufferSize, 8 * 1024, 16 * 1024, 32 * 1024, 64 * 1024:
+		return true
+	default:
+		return false
+	}
 }
 
 // WithOriginCheck sets a custom origin validation function.
-// If not set, all origins are allowed (development mode).
+// If not set, gorilla/websocket applies its default same-origin policy.
 func WithOriginCheck(parseFn func(r *http.Request) bool) ServerOption {
 	return func(parseO *serverOptions) {
 		parseO.checkOrigin = parseFn
@@ -37,6 +84,35 @@ func WithBufferSizes(parseRead, parseWrite int) ServerOption {
 	return func(parseO *serverOptions) {
 		parseO.readBufferSize = parseRead
 		parseO.writeBufferSize = parseWrite
+	}
+}
+
+// WithReadLimitBytes sets a websocket read limit for bridged clients.
+func WithReadLimitBytes(parseLimit int64) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.readLimitBytes = parseLimit
+	}
+}
+
+// WithReadLimitDisabled disables websocket read-size limiting for bridge handlers.
+func WithReadLimitDisabled() ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.shouldDisableReadLimit = true
+	}
+}
+
+// WithKeepalive enables server-side websocket ping and idle timeout handling.
+func WithKeepalive(parsePingInterval time.Duration, parseIdleTimeout time.Duration) ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.pingInterval = parsePingInterval
+		parseO.idleTimeout = parseIdleTimeout
+	}
+}
+
+// WithBridgeWebSocketCompression enables websocket per-message compression for bridge handlers.
+func WithBridgeWebSocketCompression() ServerOption {
+	return func(parseO *serverOptions) {
+		parseO.shouldEnableCompression = true
 	}
 }
 
@@ -54,6 +130,206 @@ func WithDisconnectHook(parseFn func(r *http.Request)) ServerOption {
 	}
 }
 
+// GetBridgeConfigError validates BridgeConfig for server handler creation.
+func GetBridgeConfigError(parseConfig BridgeConfig) error {
+	if parseConfig.ReadBufferSize < 0 {
+		return fmt.Errorf("grpctunnel: ReadBufferSize must be >= 0")
+	}
+	if parseConfig.WriteBufferSize < 0 {
+		return fmt.Errorf("grpctunnel: WriteBufferSize must be >= 0")
+	}
+	if parseConfig.ReadLimitBytes < 0 {
+		return fmt.Errorf("grpctunnel: ReadLimitBytes must be >= 0")
+	}
+	if parseConfig.ShouldDisableReadLimit && parseConfig.ReadLimitBytes > 0 {
+		return fmt.Errorf("grpctunnel: ReadLimitBytes cannot be set when ShouldDisableReadLimit is true")
+	}
+	if parseConfig.PingInterval < 0 {
+		return fmt.Errorf("grpctunnel: PingInterval must be >= 0")
+	}
+	if parseConfig.IdleTimeout < 0 {
+		return fmt.Errorf("grpctunnel: IdleTimeout must be >= 0")
+	}
+	if parseConfig.IdleTimeout > 0 && parseConfig.PingInterval <= 0 {
+		return fmt.Errorf("grpctunnel: PingInterval must be > 0 when IdleTimeout is set")
+	}
+	if parseConfig.IdleTimeout > 0 && parseConfig.PingInterval >= parseConfig.IdleTimeout {
+		return fmt.Errorf("grpctunnel: PingInterval must be less than IdleTimeout")
+	}
+	return nil
+}
+
+// applyBridgeConnectionSettings applies optional websocket limits and keepalive behavior.
+func applyBridgeConnectionSettings(parseWebSocket *websocket.Conn, parseConfig BridgeConfig) (func(), error) {
+	parseReadLimitBytes := getBridgeReadLimitBytes(parseConfig)
+	if parseReadLimitBytes > 0 {
+		parseWebSocket.SetReadLimit(parseReadLimitBytes)
+	}
+
+	if parseConfig.IdleTimeout > 0 {
+		parseErr := parseWebSocket.SetReadDeadline(time.Now().Add(parseConfig.IdleTimeout))
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		parseWebSocket.SetPongHandler(func(parseApplicationData string) error {
+			return parseWebSocket.SetReadDeadline(time.Now().Add(parseConfig.IdleTimeout))
+		})
+	}
+
+	if parseConfig.PingInterval <= 0 {
+		return func() {}, nil
+	}
+
+	parseStopChannel := make(chan struct{})
+	var parseStopOnce sync.Once
+	parseWriteTimeout := buildBridgePingWriteTimeout(parseConfig)
+	go func() {
+		parseTicker := time.NewTicker(parseConfig.PingInterval)
+		defer parseTicker.Stop()
+
+		for {
+			select {
+			case <-parseTicker.C:
+				parseErr := parseWebSocket.WriteControl(websocket.PingMessage, nil, time.Now().Add(parseWriteTimeout))
+				if parseErr != nil {
+					_ = parseWebSocket.Close()
+					return
+				}
+			case <-parseStopChannel:
+				return
+			}
+		}
+	}()
+
+	return func() {
+		parseStopOnce.Do(func() {
+			close(parseStopChannel)
+		})
+	}, nil
+}
+
+// getBridgeReadLimitBytes resolves websocket read-size guarding for bridge handlers.
+func getBridgeReadLimitBytes(parseConfig BridgeConfig) int64 {
+	if parseConfig.ShouldDisableReadLimit {
+		return 0
+	}
+	if parseConfig.ReadLimitBytes > 0 {
+		return parseConfig.ReadLimitBytes
+	}
+	return parseDefaultReadLimitBytes
+}
+
+// buildBridgePingWriteTimeout derives a deadline for websocket ping control frames.
+func buildBridgePingWriteTimeout(parseConfig BridgeConfig) time.Duration {
+	parseWriteTimeout := parseConfig.PingInterval
+	if parseConfig.IdleTimeout > 0 && (parseWriteTimeout <= 0 || parseWriteTimeout > parseConfig.IdleTimeout) {
+		parseWriteTimeout = parseConfig.IdleTimeout
+	}
+	if parseWriteTimeout <= 0 {
+		parseWriteTimeout = time.Second
+	}
+	return parseWriteTimeout
+}
+
+// BuildBridgeHandler creates a typed websocket handler for a gRPC server.
+func BuildBridgeHandler(parseGrpcServer *grpc.Server, parseConfig BridgeConfig) (http.Handler, error) {
+	if parseGrpcServer == nil {
+		return nil, fmt.Errorf("grpctunnel: grpc server is required")
+	}
+	if parseErr := GetBridgeConfigError(parseConfig); parseErr != nil {
+		return nil, parseErr
+	}
+
+	parseReadBufferSize := parseConfig.ReadBufferSize
+	if parseReadBufferSize == 0 {
+		parseReadBufferSize = parseDefaultWebSocketBufferSize
+	}
+
+	parseWriteBufferSize := parseConfig.WriteBufferSize
+	if parseWriteBufferSize == 0 {
+		parseWriteBufferSize = parseDefaultWebSocketBufferSize
+	}
+
+	parseUpgrader := websocket.Upgrader{
+		ReadBufferSize:    parseReadBufferSize,
+		WriteBufferSize:   parseWriteBufferSize,
+		WriteBufferPool:   buildWebSocketWriteBufferPool(parseWriteBufferSize),
+		CheckOrigin:       parseConfig.CheckOrigin,
+		EnableCompression: parseConfig.ShouldEnableCompression,
+	}
+	parseHTTP2Server := &http2.Server{}
+	parseServeH2CHandler := h2c.NewHandler(parseGrpcServer, parseHTTP2Server)
+
+	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
+		// Upgrade to WebSocket
+		parseWs, parseErr := parseUpgrader.Upgrade(parseW, parseR2, nil)
+		if parseErr != nil {
+			logGrpctunnelEvent("grpctunnel.bridge", "WARN", "ws_upgrade_failed", parseR2, parseErr, "WebSocket upgrade failed")
+			return
+		}
+		logGrpctunnelEvent("grpctunnel.bridge", "INFO", "ws_upgrade_succeeded", parseR2, nil, "WebSocket upgrade succeeded")
+		defer parseWs.Close()
+
+		parseStopKeepalive, parseErr := applyBridgeConnectionSettings(parseWs, parseConfig)
+		if parseErr != nil {
+			logGrpctunnelEvent("grpctunnel.bridge", "WARN", "ws_connection_setup_failed", parseR2, parseErr, "WebSocket connection setup failed")
+			return
+		}
+		defer parseStopKeepalive()
+
+		// Lifecycle hooks
+		if parseConfig.OnConnect != nil {
+			parseConfig.OnConnect(parseR2)
+		}
+		logGrpctunnelEvent("grpctunnel.bridge", "INFO", "tunnel_connect", parseR2, nil, "Tunnel connected")
+		defer func() {
+			logGrpctunnelEvent("grpctunnel.bridge", "INFO", "tunnel_disconnect", parseR2, nil, "Tunnel disconnected")
+			if parseConfig.OnDisconnect != nil {
+				parseConfig.OnDisconnect(parseR2)
+			}
+		}()
+
+		// Wrap WebSocket as net.Conn
+		parseConn := newWebSocketConn(parseWs)
+		defer parseConn.Close()
+
+		// Serve gRPC over HTTP/2 on the WebSocket connection
+		parseHTTP2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+			Handler: parseServeH2CHandler,
+		})
+	}), nil
+}
+
+// HandleBridgeMux registers a typed bridge handler on a mux path.
+func HandleBridgeMux(parseMux *http.ServeMux, parseBridgePath string, parseGrpcServer *grpc.Server, parseConfig BridgeConfig) error {
+	if parseMux == nil {
+		return fmt.Errorf("grpctunnel: mux is required")
+	}
+	if parseBridgePath == "" {
+		return fmt.Errorf("grpctunnel: bridge path is required")
+	}
+
+	parseHandler, parseErr := BuildBridgeHandler(parseGrpcServer, parseConfig)
+	if parseErr != nil {
+		return parseErr
+	}
+	parseMux.Handle(parseBridgePath, parseHandler)
+	return nil
+}
+
+// buildServerOptions applies functional server options onto defaults.
+func buildServerOptions(parseOpts ...ServerOption) *serverOptions {
+	parseOptions := &serverOptions{
+		readBufferSize:  parseDefaultWebSocketBufferSize,
+		writeBufferSize: parseDefaultWebSocketBufferSize,
+	}
+
+	for _, parseOpt := range parseOpts {
+		parseOpt(parseOptions)
+	}
+	return parseOptions
+}
+
 // Wrap creates an http.Handler that serves a gRPC server over WebSocket.
 // This is the middleware-style API for integrating WebSocket transport.
 //
@@ -63,50 +339,26 @@ func WithDisconnectHook(parseFn func(r *http.Request)) ServerOption {
 //	proto.RegisterYourServiceServer(grpcServer, &yourImpl{})
 //	http.ListenAndServe(":8080", grpctunnel.Wrap(grpcServer))
 func Wrap(parseGrpcServer *grpc.Server, parseOpts ...ServerOption) http.Handler {
-	parseOptions := &serverOptions{
-		readBufferSize:  4096,
-		writeBufferSize: 4096,
-		checkOrigin:     func(parseR *http.Request) bool { return true },
-	}
-
-	for _, parseOpt := range parseOpts {
-		parseOpt(parseOptions)
-	}
-
-	parseUpgrader := websocket.Upgrader{
-		ReadBufferSize:  parseOptions.readBufferSize,
-		WriteBufferSize: parseOptions.writeBufferSize,
-		CheckOrigin:     parseOptions.checkOrigin,
-	}
-
-	return http.HandlerFunc(func(parseW http.ResponseWriter, parseR2 *http.Request) {
-		// Upgrade to WebSocket
-		parseWs, parseErr := parseUpgrader.Upgrade(parseW, parseR2, nil)
-		if parseErr != nil {
-			return
-		}
-		defer parseWs.Close()
-
-		// Lifecycle hooks
-		if parseOptions.onConnect != nil {
-			parseOptions.onConnect(parseR2)
-		}
-		defer func() {
-			if parseOptions.onDisconnect != nil {
-				parseOptions.onDisconnect(parseR2)
-			}
-		}()
-
-		// Wrap WebSocket as net.Conn
-		parseConn := newWebSocketConn(parseWs)
-		defer parseConn.Close()
-
-		// Serve gRPC over HTTP/2 on the WebSocket connection
-		parseH2Server := &http2.Server{}
-		parseH2Server.ServeConn(parseConn, &http2.ServeConnOpts{
-			Handler: h2c.NewHandler(parseGrpcServer, parseH2Server),
-		})
+	parseOptions := buildServerOptions(parseOpts...)
+	parseHandler, parseErr := BuildBridgeHandler(parseGrpcServer, BridgeConfig{
+		CheckOrigin:             parseOptions.checkOrigin,
+		ReadBufferSize:          parseOptions.readBufferSize,
+		WriteBufferSize:         parseOptions.writeBufferSize,
+		ReadLimitBytes:          parseOptions.readLimitBytes,
+		ShouldDisableReadLimit:  parseOptions.shouldDisableReadLimit,
+		PingInterval:            parseOptions.pingInterval,
+		IdleTimeout:             parseOptions.idleTimeout,
+		ShouldEnableCompression: parseOptions.shouldEnableCompression,
+		OnConnect:               parseOptions.onConnect,
+		OnDisconnect:            parseOptions.onDisconnect,
 	})
+	if parseErr != nil {
+		return http.HandlerFunc(func(parseW http.ResponseWriter, parseR *http.Request) {
+			logGrpctunnelEvent("grpctunnel.bridge", "ERROR", "bridge_handler_init_failed", parseR, parseErr, "Bridge handler initialization failed")
+			http.Error(parseW, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		})
+	}
+	return parseHandler
 }
 
 // Serve accepts connections on the listener and serves gRPC over WebSocket.

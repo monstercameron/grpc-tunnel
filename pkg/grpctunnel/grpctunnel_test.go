@@ -1,9 +1,12 @@
 //go:build !js && !wasm
 
+//lint:file-ignore SA1019 grpc.WithBlock is retained in timeout tests to validate blocking dial behavior on grpc 1.x.
+
 package grpctunnel
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -149,6 +152,22 @@ func TestDial_TLSInference(parseT *testing.T) {
 	parseExpected := "wss://localhost:8080"
 	if parseResult != parseExpected {
 		parseT.Errorf("Expected %s with TLS, got %s", parseExpected, parseResult)
+	}
+}
+
+// TestDial_WithTLSNilConfigInference verifies WithTLS(nil) still selects wss URL inference.
+func TestDial_WithTLSNilConfigInference(parseT *testing.T) {
+	parseOptions := &clientOptions{}
+	WithTLS(nil)(parseOptions)
+
+	if !parseOptions.isUseTLS {
+		parseT.Fatal("Expected WithTLS(nil) to force TLS URL inference")
+	}
+
+	parseResult := inferWebSocketURL("localhost:8080", parseOptions.isUseTLS)
+	parseExpected := "wss://localhost:8080"
+	if parseResult != parseExpected {
+		parseT.Fatalf("Expected %s with WithTLS(nil), got %s", parseExpected, parseResult)
 	}
 }
 
@@ -352,6 +371,32 @@ func TestDial_ContextTimeout(parseT *testing.T) {
 	}
 }
 
+func TestDial_WithTLSOption(parseT *testing.T) {
+	parseCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, parseErr := DialContext(parseCtx, "wss://127.0.0.1:65535",
+		WithTLS(&tls.Config{InsecureSkipVerify: true}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if parseErr == nil {
+		parseT.Error("Expected connection error for unreachable endpoint")
+	}
+}
+
+func TestDial_UnsupportedOptionType(parseT *testing.T) {
+	parseCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, parseErr := DialContext(parseCtx, "ws://127.0.0.1:65535",
+		"invalid-option-type",
+	)
+	if parseErr == nil {
+		parseT.Fatal("Expected option parsing error")
+	}
+}
+
 func TestWrap_OriginRejection(parseT *testing.T) {
 	parseGrpcServer := grpc.NewServer()
 	proto.RegisterTodoServiceServer(parseGrpcServer, &mockService{})
@@ -383,5 +428,82 @@ func TestWrap_OriginRejection(parseT *testing.T) {
 		// Connection might succeed but gRPC calls should fail
 		// This is acceptable - origin check prevents actual data transfer
 		parseT.Log("Connection succeeded but origin check should prevent WebSocket upgrade")
+	}
+}
+
+func TestBuildTunnelConn(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockService{})
+	defer parseGrpcServer.Stop()
+
+	parseServer := httptest.NewServer(Wrap(parseGrpcServer))
+	defer parseServer.Close()
+
+	parseWsURL := "ws" + parseServer.URL[4:]
+	parseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	parseConn, parseErr := BuildTunnelConn(parseCtx, TunnelConfig{
+		Target:      parseWsURL,
+		GRPCOptions: ApplyTunnelInsecureCredentials(nil),
+	})
+	if parseErr != nil {
+		parseT.Fatalf("BuildTunnelConn failed: %v", parseErr)
+	}
+	defer parseConn.Close()
+
+	parseClient := proto.NewTodoServiceClient(parseConn)
+	parseResp, parseErr := parseClient.CreateTodo(parseCtx, &proto.CreateTodoRequest{Text: "Typed API test"})
+	if parseErr != nil {
+		parseT.Fatalf("CreateTodo failed: %v", parseErr)
+	}
+	if parseResp.GetTodo().GetText() != "Typed API test" {
+		parseT.Fatalf("Unexpected todo text: %s", parseResp.GetTodo().GetText())
+	}
+}
+
+func TestGetTunnelConfigError_EmptyTarget(parseT *testing.T) {
+	parseErr := GetTunnelConfigError(TunnelConfig{})
+	if parseErr == nil {
+		parseT.Fatal("Expected target validation error")
+	}
+}
+
+func TestParseTunnelTargetURL_InvalidScheme(parseT *testing.T) {
+	_, parseErr := ParseTunnelTargetURL("http://localhost:8080", false)
+	if parseErr == nil {
+		parseT.Fatal("Expected invalid scheme error")
+	}
+}
+
+func TestBuildBridgeHandler_NilServer(parseT *testing.T) {
+	_, parseErr := BuildBridgeHandler(nil, BridgeConfig{})
+	if parseErr == nil {
+		parseT.Fatal("Expected nil server validation error")
+	}
+}
+
+func TestHandleBridgeMux(parseT *testing.T) {
+	parseGrpcServer := grpc.NewServer()
+	proto.RegisterTodoServiceServer(parseGrpcServer, &mockService{})
+	defer parseGrpcServer.Stop()
+
+	parseMux := http.NewServeMux()
+	parseErr := HandleBridgeMux(parseMux, "/grpc", parseGrpcServer, BridgeConfig{})
+	if parseErr != nil {
+		parseT.Fatalf("HandleBridgeMux failed: %v", parseErr)
+	}
+
+	parseServer := httptest.NewServer(parseMux)
+	defer parseServer.Close()
+
+	parseResp, parseErr := http.Get(parseServer.URL + "/grpc")
+	if parseErr != nil {
+		parseT.Fatalf("GET /grpc failed: %v", parseErr)
+	}
+	defer parseResp.Body.Close()
+
+	if parseResp.StatusCode == http.StatusNotFound {
+		parseT.Fatalf("Expected /grpc handler to be registered, got status %d", parseResp.StatusCode)
 	}
 }

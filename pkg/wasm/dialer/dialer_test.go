@@ -44,6 +44,15 @@ func TestNew_URLFormats(parseT *testing.T) {
 	}
 }
 
+func TestNewWithConfig_ReturnType(parseT *testing.T) {
+	parseDialOption := NewWithConfig("ws://localhost:8080", Config{
+		Subprotocols: []string{"proto.v1"},
+	})
+	if parseDialOption == nil {
+		parseT.Fatal("NewWithConfig returned nil")
+	}
+}
+
 // TestNewWebSocketDialer_NoWebSocketGlobal tests behavior when WebSocket is not available
 func TestNewWebSocketDialer_NoWebSocketGlobal(parseT *testing.T) {
 	// In a real WASM environment, WebSocket should always be available
@@ -130,8 +139,19 @@ func TestNew_Integration(parseT *testing.T) {
 
 	parseDialOption := New("ws://localhost:9999")
 
-	// Try to dial - should fail since no server is running
-	_, parseErr := grpc.DialContext(parseDialContext, "ignored:1234", parseDialOption, grpc.WithInsecure())
+	// Try to dial - should fail since no server is running.
+	// Use WithBlock so the timeout surfaces as a dial error rather than an async
+	// background connection failure.
+	parseConnection, parseErr := grpc.DialContext(
+		parseDialContext,
+		"ignored:1234",
+		parseDialOption,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	)
+	if parseConnection != nil {
+		defer parseConnection.Close()
+	}
 
 	if parseErr == nil {
 		parseT.Error("expected connection error with no server running")
@@ -149,6 +169,7 @@ func TestBrowserWebSocketConnection_Channels(parseT *testing.T) {
 	parseMockBrowserWebSocket.Set(jsPropertyReadyState, 1) // OPEN
 
 	parseNetworkConnection := NewWebSocketConn(parseMockBrowserWebSocket).(*browserWebSocketConnection)
+	defer parseNetworkConnection.closeChannels()
 
 	if parseNetworkConnection.incomingMessagesChannel == nil {
 		parseT.Error("incomingMessagesChannel not initialized")
@@ -156,10 +177,6 @@ func TestBrowserWebSocketConnection_Channels(parseT *testing.T) {
 
 	if parseNetworkConnection.incomingErrorsChannel == nil {
 		parseT.Error("incomingErrorsChannel not initialized")
-	}
-
-	if parseNetworkConnection.outgoingMessagesChannel == nil {
-		parseT.Error("outgoingMessagesChannel not initialized")
 	}
 }
 
@@ -171,6 +188,7 @@ func TestBrowserWebSocketConnection_LocalAddr(parseT *testing.T) {
 
 	parseMockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	parseNetworkConnection := NewWebSocketConn(parseMockBrowserWebSocket)
+	defer parseNetworkConnection.(*browserWebSocketConnection).closeChannels()
 
 	parseLocalAddress := parseNetworkConnection.LocalAddr()
 	if parseLocalAddress == nil {
@@ -190,6 +208,7 @@ func TestBrowserWebSocketConnection_RemoteAddr(parseT *testing.T) {
 
 	parseMockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	parseNetworkConnection := NewWebSocketConn(parseMockBrowserWebSocket)
+	defer parseNetworkConnection.(*browserWebSocketConnection).closeChannels()
 
 	parseRemoteAddress := parseNetworkConnection.RemoteAddr()
 	if parseRemoteAddress == nil {
@@ -209,6 +228,7 @@ func TestBrowserWebSocketConnection_Deadlines(parseT *testing.T) {
 
 	parseMockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
 	parseNetworkConnection := NewWebSocketConn(parseMockBrowserWebSocket)
+	defer parseNetworkConnection.(*browserWebSocketConnection).closeChannels()
 
 	parseCurrentTime := time.Now()
 	parseFutureDeadline := parseCurrentTime.Add(time.Second)
@@ -235,10 +255,12 @@ func TestBrowserWebSocketConnection_Close(parseT *testing.T) {
 
 	isCloseMethodCalled := false
 	parseMockBrowserWebSocket := js.Global().Get(jsGlobalObject).New()
-	parseMockBrowserWebSocket.Set(jsMethodClose, js.FuncOf(func(parseThis js.Value, parseFunctionArgs []js.Value) interface{} {
+	parseCloseMethod := js.FuncOf(func(parseThis js.Value, parseFunctionArgs []js.Value) interface{} {
 		isCloseMethodCalled = true
 		return nil
-	}))
+	})
+	defer parseCloseMethod.Release()
+	parseMockBrowserWebSocket.Set(jsMethodClose, parseCloseMethod)
 
 	parseNetworkConnection := NewWebSocketConn(parseMockBrowserWebSocket)
 	parseErr := parseNetworkConnection.Close()

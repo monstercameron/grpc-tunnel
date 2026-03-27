@@ -4,14 +4,17 @@
 package main
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
@@ -20,11 +23,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+const parsePersistSignalBufferSize = 1
+const parsePersistDebounceDuration = 40 * time.Millisecond
+
+var shouldLogTodoOperations = os.Getenv("GOGRPCBRIDGE_VERBOSE_TODO_LOGS") == "1"
+
 // TodoServer implementation
 type todoServer struct {
 	proto.UnimplementedTodoServiceServer
-	mu    sync.Mutex
-	store []*proto.Todo
+	mu               sync.RWMutex
+	store            *list.List
+	storeByID        map[string]*list.Element
+	persistSignal    chan struct{}
+	persistActionLog string
 }
 
 func loadTodos() ([]*proto.Todo, error) {
@@ -34,11 +45,11 @@ func loadTodos() ([]*proto.Todo, error) {
 		if parseErr2 := os.MkdirAll("../_shared/data", 0750); parseErr2 != nil {
 			return nil, fmt.Errorf("failed to create data directory: %w", parseErr2)
 		}
-		if parseErr3 := ioutil.WriteFile(filePath, []byte("[]"), 0600); parseErr3 != nil {
+		if parseErr3 := os.WriteFile(filePath, []byte("[]"), 0600); parseErr3 != nil {
 			return nil, fmt.Errorf("failed to create todos.json: %w", parseErr3)
 		}
 	}
-	parseData, parseErr4 := ioutil.ReadFile(filePath)
+	parseData, parseErr4 := os.ReadFile(filePath)
 	if parseErr4 != nil {
 		return nil, fmt.Errorf("failed to read todos.json: %w", parseErr4)
 	}
@@ -47,19 +58,110 @@ func loadTodos() ([]*proto.Todo, error) {
 	}
 	var parseTs []*proto.Todo
 	if parseErr5 := json.Unmarshal(parseData, &parseTs); parseErr5 != nil {
-		_ = ioutil.WriteFile(filePath, []byte("[]"), 0600)
+		_ = os.WriteFile(filePath, []byte("[]"), 0600)
 		return []*proto.Todo{}, nil
 	}
 	return parseTs, nil
 }
 
+// saveTodos saveTodos writes the in-memory slice back to the shared json file.
 func saveTodos(parseTodosSlice []*proto.Todo) error {
 	const filePath = "../_shared/data/todos.json"
-	parseOut, parseErr := json.MarshalIndent(parseTodosSlice, "", "  ")
+	parseOut, parseErr := json.Marshal(parseTodosSlice)
 	if parseErr != nil {
 		return parseErr
 	}
-	return ioutil.WriteFile(filePath, parseOut, 0600)
+	return os.WriteFile(filePath, parseOut, 0600)
+}
+
+// buildTodoStore buildTodoStore initializes insertion-order todo storage and ID lookups.
+func buildTodoStore(parseTodosSlice []*proto.Todo) (*list.List, map[string]*list.Element) {
+	parseTodoOrder := list.New()
+	parseTodoByID := make(map[string]*list.Element, len(parseTodosSlice))
+
+	for _, parseTodo := range parseTodosSlice {
+		if parseTodo == nil {
+			continue
+		}
+		if parseTodo.Id == "" {
+			log.Printf("WARN: skipping todo with empty ID during startup")
+			continue
+		}
+		if _, hasTodo := parseTodoByID[parseTodo.Id]; hasTodo {
+			log.Printf("WARN: skipping duplicate todo ID during startup: %s", parseTodo.Id)
+			continue
+		}
+		parseTodoByID[parseTodo.Id] = parseTodoOrder.PushBack(parseTodo)
+	}
+
+	return parseTodoOrder, parseTodoByID
+}
+
+// buildTodosSnapshot buildTodosSnapshot copies todos in insertion order so callers can release locks safely.
+func buildTodosSnapshot(parseTodoOrder *list.List, parseTodoByID map[string]*list.Element) []*proto.Todo {
+	parseTodosSnapshot := make([]*proto.Todo, 0, len(parseTodoByID))
+	for parseTodoNode := parseTodoOrder.Front(); parseTodoNode != nil; parseTodoNode = parseTodoNode.Next() {
+		parseTodo, parseIsTodo := parseTodoNode.Value.(*proto.Todo)
+		if !parseIsTodo || parseTodo == nil {
+			continue
+		}
+		parseTodosSnapshot = append(parseTodosSnapshot, parseTodo)
+	}
+	return parseTodosSnapshot
+}
+
+// handleTodosPersistResult records persistence failures and warns on slow writes.
+func handleTodosPersistResult(parseAction string, parseTodosSlice []*proto.Todo, parsePersistStarted time.Time, parsePersistErr error) {
+	if parsePersistErr != nil {
+		log.Printf("ERROR: failed to persist todos after %s: %v", parseAction, parsePersistErr)
+		return
+	}
+
+	parsePersistDuration := time.Since(parsePersistStarted)
+	if parsePersistDuration > 150*time.Millisecond {
+		log.Printf("WARN: persisting todos after %s took %s for %d records", parseAction, parsePersistDuration, len(parseTodosSlice))
+	}
+}
+
+// signalTodosPersistLocked signalTodosPersistLocked marks the store dirty and schedules one persistence run.
+func (parseS *todoServer) signalTodosPersistLocked(parseAction string) {
+	parseS.persistActionLog = parseAction
+	select {
+	case parseS.persistSignal <- struct{}{}:
+	default:
+	}
+}
+
+// runTodosPersistWorker runTodosPersistWorker coalesces mutation signals and persists snapshots asynchronously.
+func (parseS *todoServer) runTodosPersistWorker() {
+	for range parseS.persistSignal {
+		// Debounce high-frequency write bursts so multiple mutations collapse into one file rewrite.
+		parseDebounceTimer := time.NewTimer(parsePersistDebounceDuration)
+		for {
+			select {
+			case <-parseS.persistSignal:
+				if !parseDebounceTimer.Stop() {
+					select {
+					case <-parseDebounceTimer.C:
+					default:
+					}
+				}
+				parseDebounceTimer.Reset(parsePersistDebounceDuration)
+			case <-parseDebounceTimer.C:
+				goto runPersist
+			}
+		}
+
+	runPersist:
+		parseS.mu.RLock()
+		parseStoreSnapshot := buildTodosSnapshot(parseS.store, parseS.storeByID)
+		parseAction := parseS.persistActionLog
+		parseS.mu.RUnlock()
+
+		parsePersistStarted := time.Now()
+		parsePersistErr := saveTodos(parseStoreSnapshot)
+		handleTodosPersistResult(parseAction, parseStoreSnapshot, parsePersistStarted, parsePersistErr)
+	}
 }
 
 func newTodoServer() (*todoServer, error) {
@@ -67,64 +169,106 @@ func newTodoServer() (*todoServer, error) {
 	if parseErr != nil {
 		return nil, parseErr
 	}
-	return &todoServer{store: parseT}, nil
+	parseTodoOrder, parseTodoByID := buildTodoStore(parseT)
+	parseServer := &todoServer{
+		store:         parseTodoOrder,
+		storeByID:     parseTodoByID,
+		persistSignal: make(chan struct{}, parsePersistSignalBufferSize),
+	}
+	go parseServer.runTodosPersistWorker()
+	return parseServer, nil
 }
 
 func (parseS *todoServer) CreateTodo(parseCtx context.Context, parseReq *proto.CreateTodoRequest) (*proto.CreateTodoResponse, error) {
 	parseS.mu.Lock()
-	defer parseS.mu.Unlock()
 	parseNewID := uuid.New().String()
 	parseNewTodo := &proto.Todo{Id: parseNewID, Text: parseReq.Text, Done: false}
-	parseS.store = append(parseS.store, parseNewTodo)
-	_ = saveTodos(parseS.store)
-	log.Printf("Created new todo: %s => %s\n", parseNewID, parseReq.Text)
+	parseS.storeByID[parseNewID] = parseS.store.PushBack(parseNewTodo)
+	parseS.signalTodosPersistLocked("create")
+	parseS.mu.Unlock()
+
+	if shouldLogTodoOperations {
+		log.Printf("Created new todo: %s => %s", parseNewID, parseReq.Text)
+	}
 	return &proto.CreateTodoResponse{Todo: parseNewTodo}, nil
 }
 
 func (parseS *todoServer) ListTodos(parseCtx context.Context, parseReq *proto.ListTodosRequest) (*proto.ListTodosResponse, error) {
-	parseS.mu.Lock()
-	defer parseS.mu.Unlock()
-	return &proto.ListTodosResponse{Todos: parseS.store}, nil
+	parseS.mu.RLock()
+	parseTodos := buildTodosSnapshot(parseS.store, parseS.storeByID)
+	parseS.mu.RUnlock()
+	return &proto.ListTodosResponse{Todos: parseTodos}, nil
 }
 
 func (parseS *todoServer) UpdateTodo(parseCtx context.Context, parseReq *proto.UpdateTodoRequest) (*proto.UpdateTodoResponse, error) {
 	parseS.mu.Lock()
-	defer parseS.mu.Unlock()
-	var parseUpdated *proto.Todo
-	for _, parseT := range parseS.store {
-		if parseT.Id == parseReq.Id {
-			parseT.Text = parseReq.Text
-			parseT.Done = parseReq.Done
-			parseUpdated = parseT
-			break
-		}
-	}
-	if parseUpdated == nil {
+	parseTodoNode, hasTodo := parseS.storeByID[parseReq.Id]
+	if !hasTodo {
+		parseS.mu.Unlock()
 		return &proto.UpdateTodoResponse{}, nil
 	}
-	_ = saveTodos(parseS.store)
+
+	parseCurrentTodo, parseIsTodo := parseTodoNode.Value.(*proto.Todo)
+	if !parseIsTodo || parseCurrentTodo == nil {
+		delete(parseS.storeByID, parseReq.Id)
+		parseS.store.Remove(parseTodoNode)
+		parseS.mu.Unlock()
+		log.Printf("WARN: dropped corrupt todo node while updating ID: %s", parseReq.Id)
+		return &proto.UpdateTodoResponse{}, nil
+	}
+
+	parseUpdated := &proto.Todo{
+		Id:   parseCurrentTodo.Id,
+		Text: parseReq.Text,
+		Done: parseReq.Done,
+	}
+	parseTodoNode.Value = parseUpdated
+	parseS.signalTodosPersistLocked("update")
+	parseS.mu.Unlock()
+
 	return &proto.UpdateTodoResponse{Todo: parseUpdated}, nil
 }
 
 func (parseS *todoServer) DeleteTodo(parseCtx context.Context, parseReq *proto.DeleteTodoRequest) (*proto.DeleteTodoResponse, error) {
 	parseS.mu.Lock()
-	defer parseS.mu.Unlock()
-	parseIndex := -1
-	for parseI, parseT := range parseS.store {
-		if parseT.Id == parseReq.Id {
-			parseIndex = parseI
-			break
-		}
-	}
-	if parseIndex == -1 {
+	parseTodoNode, hasTodo := parseS.storeByID[parseReq.Id]
+	if !hasTodo {
+		parseS.mu.Unlock()
 		return &proto.DeleteTodoResponse{Success: false}, nil
 	}
-	parseS.store = append(parseS.store[:parseIndex], parseS.store[parseIndex+1:]...)
-	_ = saveTodos(parseS.store)
+
+	parseS.store.Remove(parseTodoNode)
+	delete(parseS.storeByID, parseReq.Id)
+	parseS.signalTodosPersistLocked("delete")
+	parseS.mu.Unlock()
+
 	return &proto.DeleteTodoResponse{Success: true}, nil
 }
 
+// isBridgeOriginAllowed allows browser-origin upgrades from local development hosts only.
+func isBridgeOriginAllowed(parseR *http.Request) bool {
+	parseOrigin := parseR.Header.Get("Origin")
+	if parseOrigin == "" {
+		return true
+	}
+
+	parseOriginURL, parseErr := url.Parse(parseOrigin)
+	if parseErr != nil || parseOriginURL.Host == "" {
+		return false
+	}
+
+	parseOriginHost := strings.ToLower(parseOriginURL.Hostname())
+	switch parseOriginHost {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
 func main() {
+	const parseBridgeAddress = "127.0.0.1:5000"
+
 	// Create gRPC server with TodoService
 	parseSrv, parseErr := newTodoServer()
 	if parseErr != nil {
@@ -134,8 +278,9 @@ func main() {
 	proto.RegisterTodoServiceServer(parseGrpcServer, parseSrv)
 
 	// One-liner: Serve gRPC over WebSocket
-	log.Println("Direct gRPC-over-WebSocket server listening on :5000")
-	log.Fatal(grpctunnel.ListenAndServe(":5000", parseGrpcServer,
+	log.Printf("Direct gRPC-over-WebSocket server listening on %s", parseBridgeAddress)
+	log.Fatal(grpctunnel.ListenAndServe(parseBridgeAddress, parseGrpcServer,
+		grpctunnel.WithOriginCheck(isBridgeOriginAllowed),
 		grpctunnel.WithConnectHook(func(parseR *http.Request) {
 			log.Printf("Client connected: %s", parseR.RemoteAddr)
 		}),

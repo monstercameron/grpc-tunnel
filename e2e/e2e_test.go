@@ -4,11 +4,8 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
-	"net/http"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -70,33 +67,26 @@ func startCommand(parseT *testing.T, parseProjectRoot, parseName string, parseCo
 		// Cancel log reading goroutines first
 		cancel()
 
-		// Kill the process and all its children
-		if parseErr2 := parseCmd.Process.Kill(); parseErr2 != nil {
-			parseT.Logf("Failed to kill %s process: %v", parseName, parseErr2)
+		// Kill the process tree to avoid orphaned subprocesses.
+		if parseCmd.Process != nil {
+			killProcessTreeByPID(parseT, parseCmd.Process.Pid)
 		}
-		// Wait for process to actually terminate
-		parseCmd.Wait()
 
-		// Use platform-appropriate commands to kill any remaining processes
-		switch runtime.GOOS {
-		case "windows":
-			// Kill by image name
-			exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq direct-bridge.exe").Run()
-			exec.Command("powershell", "-Command", "Get-Process -Name 'direct-bridge' -ErrorAction SilentlyContinue | Stop-Process -Force").Run()
+		// Wait for process to actually terminate.
+		parseWaitDone := make(chan struct{})
+		go func() {
+			_ = parseCmd.Wait()
+			close(parseWaitDone)
+		}()
+		// Wait in a side goroutine so cleanup cannot block forever on a stuck child.
+		select {
+		case <-parseWaitDone:
+		case <-time.After(5 * time.Second):
+			parseT.Logf("Timed out waiting for %s process exit", parseName)
+		}
 
-			// Find and kill process using port 5000
-			exec.Command("powershell", "-Command",
-				"(Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }").Run()
-
-		case "linux", "darwin":
-			// Kill by process name
-			exec.Command("pkill", "-9", "-f", "direct-bridge").Run()
-
-			// Find and kill process using port 5000
-			exec.Command("sh", "-c", "lsof -ti:5000 | xargs kill -9 2>/dev/null").Run()
-
-		default:
-			parseT.Logf("Unsupported OS: %s, skipping additional cleanup", runtime.GOOS)
+		if strings.HasPrefix(parseName, "DirectBridge") {
+			clearBridgeStaleProcesses(parseT)
 		}
 
 		// Close pipes to unblock scanners
@@ -119,7 +109,7 @@ func startCommand(parseT *testing.T, parseProjectRoot, parseName string, parseCo
 			parseT.Logf("Cleanup of %s timed out", parseName)
 		}
 		// Brief delay for port release
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 	return parseCleanupFunc
 }
@@ -134,35 +124,17 @@ func TestCreateTodoEndToEnd(parseT *testing.T) {
 
 	// --- 1. Build Phase ---
 	parseT.Log("Building all components...")
-	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = parseProjectRoot // Run build.sh from the project root
-	buildOutput, parseErr := buildCmd.CombinedOutput()
-	if parseErr != nil {
-		parseT.Fatalf("Failed to build components: %v\nOutput: %s", parseErr, string(buildOutput))
-	}
+	buildWASMClient(parseT, parseProjectRoot)
 	parseT.Log("Build successful.")
 
 	// --- 2. Setup Phase ---
 	parseT.Log("Starting backend services...")
 
-	// Start direct-bridge example (serves gRPC directly over WebSocket)
-	// This uses the bridge library to serve gRPC over WebSocket
-	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
-	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	// Start direct-bridge example (serves gRPC directly over WebSocket).
+	parseBridgeCleanup := startBridgeCommand(parseT, parseProjectRoot, "DirectBridge")
 	parseT.Cleanup(parseBridgeCleanup)
 
-	// Start file server for the public directory
-	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
-	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
-	go func() {
-		if parseErr2 := parseFileServer.ListenAndServe(); parseErr2 != nil && parseErr2 != http.ErrServerClosed {
-			log.Printf("File server error: %v", parseErr2)
-		}
-	}()
-	parseT.Cleanup(func() {
-		parseT.Log("Shutting down file server...")
-		parseFileServer.Shutdown(context.Background())
-	})
+	parseServerURL := startPublicFileServer(parseT, parseProjectRoot)
 
 	// Give servers a moment to start up
 	time.Sleep(3 * time.Second)
@@ -193,7 +165,7 @@ func TestCreateTodoEndToEnd(parseT *testing.T) {
 	})
 
 	parseT.Log("Navigating to the web client...")
-	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+	if _, parseErr = parsePage.Goto(parseServerURL); parseErr != nil {
 		parseT.Fatalf("Failed to navigate to page: %v", parseErr)
 	}
 
@@ -230,27 +202,13 @@ func TestMultipleSequentialRequests(parseT *testing.T) {
 
 	// Build
 	parseT.Log("Building components...")
-	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = parseProjectRoot
-	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
-		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
-	}
+	buildWASMClient(parseT, parseProjectRoot)
 
 	// Start services
-	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
-	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseBridgeCleanup := startBridgeCommand(parseT, parseProjectRoot, "DirectBridge")
 	parseT.Cleanup(parseBridgeCleanup)
 
-	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
-	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
-	go func() {
-		if parseErr3 := parseFileServer.ListenAndServe(); parseErr3 != nil && parseErr3 != http.ErrServerClosed {
-			log.Printf("File server error: %v", parseErr3)
-		}
-	}()
-	parseT.Cleanup(func() {
-		parseFileServer.Shutdown(context.Background())
-	})
+	parseServerURL := startPublicFileServer(parseT, parseProjectRoot)
 
 	time.Sleep(3 * time.Second)
 
@@ -278,7 +236,7 @@ func TestMultipleSequentialRequests(parseT *testing.T) {
 		parseConsoleMessages <- parseMsg.Text()
 	})
 
-	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+	if _, parseErr = parsePage.Goto(parseServerURL); parseErr != nil {
 		parseT.Fatalf("Failed to navigate: %v", parseErr)
 	}
 
@@ -312,27 +270,13 @@ func TestConnectionResilience(parseT *testing.T) {
 
 	// Build
 	parseT.Log("Building components...")
-	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = parseProjectRoot
-	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
-		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
-	}
+	buildWASMClient(parseT, parseProjectRoot)
 
 	// Start services
-	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
-	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseBridgeCleanup := startBridgeCommand(parseT, parseProjectRoot, "DirectBridge")
 	parseT.Cleanup(parseBridgeCleanup)
 
-	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
-	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
-	go func() {
-		if parseErr3 := parseFileServer.ListenAndServe(); parseErr3 != nil && parseErr3 != http.ErrServerClosed {
-			log.Printf("File server error: %v", parseErr3)
-		}
-	}()
-	parseT.Cleanup(func() {
-		parseFileServer.Shutdown(context.Background())
-	})
+	parseServerURL := startPublicFileServer(parseT, parseProjectRoot)
 
 	time.Sleep(3 * time.Second)
 
@@ -369,7 +313,7 @@ func TestConnectionResilience(parseT *testing.T) {
 		}
 	})
 
-	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+	if _, parseErr = parsePage.Goto(parseServerURL); parseErr != nil {
 		parseT.Fatalf("Failed to navigate: %v", parseErr)
 	}
 
@@ -416,26 +360,12 @@ func TestConcurrentConnections(parseT *testing.T) {
 
 	// Build
 	parseT.Log("Building components...")
-	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = parseProjectRoot
-	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
-		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
-	}
+	buildWASMClient(parseT, parseProjectRoot)
 	// Start services
-	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
-	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseBridgeCleanup := startBridgeCommand(parseT, parseProjectRoot, "DirectBridge")
 	parseT.Cleanup(parseBridgeCleanup)
 
-	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
-	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
-	go func() {
-		if parseErr3 := parseFileServer.ListenAndServe(); parseErr3 != nil && parseErr3 != http.ErrServerClosed {
-			log.Printf("File server error: %v", parseErr3)
-		}
-	}()
-	parseT.Cleanup(func() {
-		parseFileServer.Shutdown(context.Background())
-	})
+	parseServerURL := startPublicFileServer(parseT, parseProjectRoot)
 
 	time.Sleep(3 * time.Second)
 
@@ -476,7 +406,7 @@ func TestConcurrentConnections(parseT *testing.T) {
 				parseConsoleMessages <- parseText
 			})
 
-			if _, parseErr4 = parsePage.Goto("http://localhost:8081"); parseErr4 != nil {
+			if _, parseErr4 = parsePage.Goto(parseServerURL); parseErr4 != nil {
 				parseErrorChan <- fmt.Errorf("tab %d: failed to navigate: %w", parseTabNum, parseErr4)
 				return
 			}
@@ -531,27 +461,13 @@ func TestLargePayload(parseT *testing.T) {
 
 	// Build
 	parseT.Log("Building components...")
-	buildCmd := exec.Command("bash", "examples/wasm-client/build.sh")
-	buildCmd.Dir = parseProjectRoot
-	if buildOutput, parseErr2 := buildCmd.CombinedOutput(); parseErr2 != nil {
-		parseT.Fatalf("Failed to build: %v\nOutput: %s", parseErr2, string(buildOutput))
-	}
+	buildWASMClient(parseT, parseProjectRoot)
 
 	// Start services
-	parseDirectBridgePath := filepath.Join(parseProjectRoot, "examples", "direct-bridge", "main.go")
-	parseBridgeCleanup := startCommand(parseT, parseProjectRoot, "DirectBridge", "go", "run", parseDirectBridgePath)
+	parseBridgeCleanup := startBridgeCommand(parseT, parseProjectRoot, "DirectBridge")
 	parseT.Cleanup(parseBridgeCleanup)
 
-	parsePublicDir := http.Dir(filepath.Join(parseProjectRoot, "examples", "_shared", "public"))
-	parseFileServer := &http.Server{Addr: ":8081", Handler: http.FileServer(parsePublicDir)}
-	go func() {
-		if parseErr3 := parseFileServer.ListenAndServe(); parseErr3 != nil && parseErr3 != http.ErrServerClosed {
-			log.Printf("File server error: %v", parseErr3)
-		}
-	}()
-	parseT.Cleanup(func() {
-		parseFileServer.Shutdown(context.Background())
-	})
+	parseServerURL := startPublicFileServer(parseT, parseProjectRoot)
 
 	time.Sleep(3 * time.Second)
 
@@ -579,7 +495,7 @@ func TestLargePayload(parseT *testing.T) {
 		parseConsoleMessages <- parseMsg.Text()
 	})
 
-	if _, parseErr = parsePage.Goto("http://localhost:8081"); parseErr != nil {
+	if _, parseErr = parsePage.Goto(parseServerURL); parseErr != nil {
 		parseT.Fatalf("Failed to navigate: %v", parseErr)
 	}
 

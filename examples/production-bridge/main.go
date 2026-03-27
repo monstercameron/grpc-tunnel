@@ -1,4 +1,5 @@
-// Production bridge example - full configuration
+// Production bridge example - compatibility-oriented full configuration.
+// For new integrations, prefer the typed pkg/grpctunnel API surface.
 package main
 
 import (

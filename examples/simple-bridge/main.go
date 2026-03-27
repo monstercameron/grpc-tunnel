@@ -1,4 +1,5 @@
-// Simple bridge server example - minimal configuration
+// Simple bridge server example - minimal compatibility configuration.
+// For new integrations, prefer the typed pkg/grpctunnel API surface.
 package main
 
 import (

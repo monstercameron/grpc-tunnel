@@ -1,0 +1,56 @@
+{
+  "generated_at_utc": "2026-03-26T13:07:50Z",
+  "go_os": "windows",
+  "go_arch": "amd64",
+  "go_version": "go version go1.25.0 windows/amd64",
+  "benchmarks": {
+    "BenchmarkGRPC_BidirectionalStream_100Messages": {
+      "benchmark_name": "BenchmarkGRPC_BidirectionalStream_100Messages",
+      "ns_per_op": 5195784,
+      "bytes_per_op": 200639,
+      "allocs_per_op": 5333,
+      "kilobytes_per_op": 0,
+      "has_kilobytes_metric": false
+    },
+    "BenchmarkGRPC_PayloadSize_1000Items": {
+      "benchmark_name": "BenchmarkGRPC_PayloadSize_1000Items",
+      "ns_per_op": 531312,
+      "bytes_per_op": 352567,
+      "allocs_per_op": 3311,
+      "kilobytes_per_op": 74.98,
+      "has_kilobytes_metric": true
+    },
+    "BenchmarkGRPC_StreamLargeDataset_1000Items": {
+      "benchmark_name": "BenchmarkGRPC_StreamLargeDataset_1000Items",
+      "ns_per_op": 11690158,
+      "bytes_per_op": 805667,
+      "allocs_per_op": 19418,
+      "kilobytes_per_op": 0,
+      "has_kilobytes_metric": false
+    },
+    "BenchmarkREST_Bidirectional_100Messages": {
+      "benchmark_name": "BenchmarkREST_Bidirectional_100Messages",
+      "ns_per_op": 5343924,
+      "bytes_per_op": 1087660,
+      "allocs_per_op": 10854,
+      "kilobytes_per_op": 0,
+      "has_kilobytes_metric": false
+    },
+    "BenchmarkREST_LargeDataset_1000Items": {
+      "benchmark_name": "BenchmarkREST_LargeDataset_1000Items",
+      "ns_per_op": 1198959,
+      "bytes_per_op": 905704,
+      "allocs_per_op": 2156,
+      "kilobytes_per_op": 0,
+      "has_kilobytes_metric": false
+    },
+    "BenchmarkREST_PayloadSize_1000Items": {
+      "benchmark_name": "BenchmarkREST_PayloadSize_1000Items",
+      "ns_per_op": 570943,
+      "bytes_per_op": 751877,
+      "allocs_per_op": 133,
+      "kilobytes_per_op": 96.59,
+      "has_kilobytes_metric": true
+    }
+  }
+}

@@ -4,7 +4,6 @@ package dialer
 
 import (
 	"context"
-	"log"
 	"net"
 	"syscall/js"
 
@@ -14,15 +13,24 @@ import (
 )
 
 const (
-	// WebSocket ready states (https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState)
-	webSocketStateConnecting = 0 // Connection not yet open
+	// JavaScript global objects
+	jsGlobalNavigator = "navigator"
+	jsGlobalDocument  = "document"
 
 	// JavaScript WebSocket event handlers
 	jsEventOnOpen = "onopen"
 
 	// JavaScript WebSocket properties
-	jsPropertyReadyState = "readyState"
+	jsPropertyReadyState      = "readyState"
+	jsPropertyOnLine          = "onLine"
+	jsPropertyVisibilityState = "visibilityState"
 )
+
+// Config configures browser websocket dialing behavior.
+type Config struct {
+	// Subprotocols configures optional websocket subprotocol negotiation.
+	Subprotocols []string
+}
 
 // newBrowserWebSocketDialer creates a custom gRPC dialer that establishes a WebSocket
 // connection in the browser environment and prepares it for gRPC communication.
@@ -42,6 +50,11 @@ const (
 // Returns:
 //   - A dialer function compatible with grpc.WithContextDialer
 func newBrowserWebSocketDialer(parseWebSocketURL string) func(context.Context, string) (net.Conn, error) {
+	return newBrowserWebSocketDialerWithConfig(parseWebSocketURL, Config{})
+}
+
+// newBrowserWebSocketDialerWithConfig creates a browser websocket dialer with additive options.
+func newBrowserWebSocketDialerWithConfig(parseWebSocketURL string, parseConfig Config) func(context.Context, string) (net.Conn, error) {
 	return func(parseDialContext context.Context, parseGrpcTargetAddress string) (net.Conn, error) {
 		// Access the browser's WebSocket constructor from the JavaScript global scope.
 		// This is the standard browser WebSocket API.
@@ -54,39 +67,38 @@ func newBrowserWebSocketDialer(parseWebSocketURL string) func(context.Context, s
 
 		// Create a new browser WebSocket instance with the provided URL.
 		// This initiates the WebSocket handshake in the background.
-		parseBrowserWebSocket := parseBrowserWebSocketConstructor.New(parseWebSocketURL)
+		parseBrowserWebSocket := buildBrowserWebSocket(parseBrowserWebSocketConstructor, parseWebSocketURL, parseConfig)
 
 		// Configure the WebSocket to use ArrayBuffer for binary data.
 		// gRPC requires binary communication, so we must set binaryType to 'arraybuffer'.
 		// The alternative 'blob' type would be incompatible with our data handling.
 		parseBrowserWebSocket.Set(jsPropertyBinaryType, jsBinaryTypeArrayBuffer)
 
-		// Create our net.Conn adapter that wraps this browser WebSocket.
-		// This adapter translates between the event-driven WebSocket API
-		// and the synchronous Read/Write interface that gRPC expects.
-		parseWebSocketNetworkConnection := NewWebSocketConn(parseBrowserWebSocket)
-
-		// Set up error handling for the WebSocket connection.
-		// Browser WebSocket errors are asynchronous events, so we use a channel
-		// to communicate them back to this synchronous function.
-		parseConnectionErrorChannel := make(chan error, 1)
-		parseBrowserWebSocket.Set("onerror", js.FuncOf(func(parseThis js.Value, parseEventArgs []js.Value) interface{} {
-			// Log the error event for debugging purposes
-			log.Printf("WASM: WebSocket error: %v", parseEventArgs[0])
-			// Send the error to our channel so we can return it
-			parseConnectionErrorChannel <- status.Errorf(codes.Unavailable, "WASM: WebSocket error during connection setup")
-			return nil
-		}))
-
-		// Set up a listener for the 'onopen' event to know when the connection is ready.
-		// Browser WebSocket connections are asynchronous, so we must wait for this event
-		// before we can start using the connection.
+		// Set up temporary connection handlers used only while dialing.
+		// NewWebSocketConn will install the steady-state handlers after open.
 		parseConnectionOpenChannel := make(chan struct{}, 1)
-		parseBrowserWebSocket.Set(jsEventOnOpen, js.FuncOf(func(parseThis2 js.Value, parseEventArgs2 []js.Value) interface{} {
-			// Signal that the connection is now open and ready to use
-			parseConnectionOpenChannel <- struct{}{}
+		parseConnectionErrorChannel := make(chan error, 1)
+		parseOpenHandler := js.FuncOf(func(parseThis js.Value, parseEventArgs []js.Value) interface{} {
+			// Dial only needs to know that open happened at least once.
+			select {
+			case parseConnectionOpenChannel <- struct{}{}:
+			default:
+			}
 			return nil
-		}))
+		})
+		defer parseOpenHandler.Release()
+		parseBrowserWebSocket.Set(jsEventOnOpen, parseOpenHandler)
+
+		parseErrorHandler := js.FuncOf(func(parseThis js.Value, parseEventArgs []js.Value) interface{} {
+			// During handshake we only surface availability-level failures.
+			select {
+			case parseConnectionErrorChannel <- status.Errorf(codes.Unavailable, "WASM: WebSocket error during connection setup (%s)", buildDialerEnvironmentState()):
+			default:
+			}
+			return nil
+		})
+		defer parseErrorHandler.Release()
+		parseBrowserWebSocket.Set(jsEventOnError, parseErrorHandler)
 
 		// Wait for one of three outcomes:
 		// 1. Connection opens successfully
@@ -94,25 +106,82 @@ func newBrowserWebSocketDialer(parseWebSocketURL string) func(context.Context, s
 		// 3. Context is cancelled (timeout or explicit cancellation)
 		select {
 		case <-parseConnectionOpenChannel:
-			// Success! The WebSocket is now connected and ready.
-			log.Println("WASM: WebSocket connection opened.")
+			// Connection is now open.
 		case parseErr := <-parseConnectionErrorChannel:
 			// Connection failed during the handshake
+			parseBrowserWebSocket.Set(jsEventOnOpen, js.Null())
+			parseBrowserWebSocket.Set(jsEventOnError, js.Null())
+			parseBrowserWebSocket.Call(jsMethodClose)
 			return nil, parseErr
 		case <-parseDialContext.Done():
 			// The dialing context was cancelled or timed out before connection completed.
-			// Clean up by closing the WebSocket if it's still in the CONNECTING state.
-			if parseBrowserWebSocket.Get(jsPropertyReadyState).Int() == webSocketStateConnecting {
-				parseBrowserWebSocket.Call(jsMethodClose)
-			}
+			// Always close on cancellation to avoid orphaning sockets if the browser
+			// transitions to OPEN concurrently with context cancellation.
+			parseBrowserWebSocket.Set(jsEventOnOpen, js.Null())
+			parseBrowserWebSocket.Set(jsEventOnError, js.Null())
+			parseBrowserWebSocket.Call(jsMethodClose)
 			// Return the context error (DeadlineExceeded or Canceled)
 			return nil, parseDialContext.Err()
 		}
 
-		// The WebSocket is now open and ready to use.
-		// Return the net.Conn adapter so gRPC can send HTTP/2 frames over it.
-		return parseWebSocketNetworkConnection, nil
+		// Remove temporary handlers before NewWebSocketConn installs steady-state handlers.
+		// This prevents handler overlap where dial-time callbacks shadow runtime callbacks.
+		parseBrowserWebSocket.Set(jsEventOnOpen, js.Null())
+		parseBrowserWebSocket.Set(jsEventOnError, js.Null())
+
+		// Return the net.Conn adapter so gRPC can send HTTP/2 frames over this socket.
+		return NewWebSocketConn(parseBrowserWebSocket), nil
 	}
+}
+
+// buildBrowserWebSocket constructs the browser WebSocket with optional subprotocols.
+func buildBrowserWebSocket(parseConstructor js.Value, parseWebSocketURL string, parseConfig Config) js.Value {
+	if len(parseConfig.Subprotocols) == 0 {
+		return parseConstructor.New(parseWebSocketURL)
+	}
+
+	parseProtocols := make([]interface{}, 0, len(parseConfig.Subprotocols))
+	for _, parseSubprotocol := range parseConfig.Subprotocols {
+		parseProtocols = append(parseProtocols, parseSubprotocol)
+	}
+	return parseConstructor.New(parseWebSocketURL, js.ValueOf(parseProtocols))
+}
+
+// isDialerBrowserOnline reports browser online state when navigator metadata is available.
+func isDialerBrowserOnline() bool {
+	parseNavigator := js.Global().Get(jsGlobalNavigator)
+	if !parseNavigator.Truthy() {
+		return true
+	}
+
+	parseOnLine := parseNavigator.Get(jsPropertyOnLine)
+	if parseOnLine.Type() != js.TypeBoolean {
+		return true
+	}
+	return parseOnLine.Bool()
+}
+
+// getDialerVisibilityState reports document visibility state when available.
+func getDialerVisibilityState() string {
+	parseDocument := js.Global().Get(jsGlobalDocument)
+	if !parseDocument.Truthy() {
+		return "visible"
+	}
+
+	parseVisibilityState := parseDocument.Get(jsPropertyVisibilityState)
+	if parseVisibilityState.Type() != js.TypeString {
+		return "visible"
+	}
+	return parseVisibilityState.String()
+}
+
+// buildDialerEnvironmentState returns a compact online and visibility snapshot for diagnostics.
+func buildDialerEnvironmentState() string {
+	parseOnlineState := "online"
+	if !isDialerBrowserOnline() {
+		parseOnlineState = "offline"
+	}
+	return parseOnlineState + ",visibility=" + getDialerVisibilityState()
 }
 
 // New creates a grpc.DialOption that can be used to dial a gRPC server over a WebSocket
@@ -153,4 +222,9 @@ func newBrowserWebSocketDialer(parseWebSocketURL string) func(context.Context, s
 // For non-WASM Go code, use bridge.DialOption instead.
 func New(parseWebSocketURL string) grpc.DialOption {
 	return grpc.WithContextDialer(newBrowserWebSocketDialer(parseWebSocketURL))
+}
+
+// NewWithConfig creates a grpc.DialOption with additive browser websocket dialing options.
+func NewWithConfig(parseWebSocketURL string, parseConfig Config) grpc.DialOption {
+	return grpc.WithContextDialer(newBrowserWebSocketDialerWithConfig(parseWebSocketURL, parseConfig))
 }

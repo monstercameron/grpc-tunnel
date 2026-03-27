@@ -2,11 +2,14 @@ package helpers
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/monstercameron/GoGRPCBridge/pkg/bridge"
 
@@ -15,13 +18,15 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+const parseDefaultBackendDialTimeout = 10 * time.Second
+
 // Config holds configuration options for the gRPC-over-WebSocket bridge.
 type Config struct {
 	// TargetAddress is the address of the backend gRPC server (e.g., "localhost:50051")
 	TargetAddress string
 
 	// CheckOrigin is called during the WebSocket upgrade to determine whether the origin is allowed.
-	// If nil, all origins are allowed (development mode).
+	// If nil, gorilla/websocket applies its default same-origin policy.
 	CheckOrigin func(r *http.Request) bool
 
 	// ReadBufferSize is the WebSocket read buffer size in bytes.
@@ -55,10 +60,13 @@ func (defaultLogger) Printf(format string, parseV ...interface{}) {
 
 // Handler is the gRPC-over-WebSocket bridge handler.
 type Handler struct {
-	config   Config
-	upgrader websocket.Upgrader
-	proxy    *httputil.ReverseProxy
-	logger   Logger
+	config         Config
+	upgrader       websocket.Upgrader
+	proxy          *httputil.ReverseProxy
+	logger         Logger
+	http2Server    *http2.Server
+	serveH2CHandle http.Handler
+	initErr        error
 }
 
 // NewHandler creates a new gRPC-over-WebSocket bridge handler.
@@ -74,28 +82,39 @@ type Handler struct {
 func NewHandler(parseCfg Config) *Handler {
 	// Set defaults
 	if parseCfg.ReadBufferSize == 0 {
-		parseCfg.ReadBufferSize = 4096
+		parseCfg.ReadBufferSize = parseDefaultWebSocketBufferSize
 	}
 	if parseCfg.WriteBufferSize == 0 {
-		parseCfg.WriteBufferSize = 4096
-	}
-	if parseCfg.CheckOrigin == nil {
-		parseCfg.CheckOrigin = func(parseR *http.Request) bool { return true }
+		parseCfg.WriteBufferSize = parseDefaultWebSocketBufferSize
 	}
 	if parseCfg.Logger == nil {
 		parseCfg.Logger = defaultLogger{}
 	}
 
-	parseTargetURL, _ := url.Parse("http://" + parseCfg.TargetAddress)
-
 	parseH := &Handler{
-		config: parseCfg,
-		logger: parseCfg.Logger,
+		config:      parseCfg,
+		logger:      parseCfg.Logger,
+		http2Server: &http2.Server{},
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  parseCfg.ReadBufferSize,
 			WriteBufferSize: parseCfg.WriteBufferSize,
+			WriteBufferPool: buildWebSocketWriteBufferPool(parseCfg.WriteBufferSize),
 			CheckOrigin:     parseCfg.CheckOrigin,
 		},
+	}
+
+	parseTargetURL, parseErr := parseProxyTargetURL(parseCfg.TargetAddress)
+	if parseErr != nil {
+		parseH.initErr = parseErr
+		parseH.logger.Printf("Bridge configuration warning: %v", parseErr)
+		return parseH
+	}
+	if shouldWarnProxyPlaintextBackend(parseTargetURL.Hostname()) {
+		parseH.logger.Printf(
+			"Bridge security warning: TargetAddress %q uses plaintext h2c backend transport to non-loopback host %q. Ensure this hop is on a trusted private network or terminate TLS before the bridge.",
+			parseCfg.TargetAddress,
+			parseTargetURL.Hostname(),
+		)
 	}
 
 	// Create the reverse proxy
@@ -108,20 +127,27 @@ func NewHandler(parseCfg Config) *Handler {
 		Transport: &http2.Transport{
 			AllowHTTP: true,
 			DialTLS: func(parseNetwork, parseAddr string, parseCfg2 *tls.Config) (net.Conn, error) {
-				return net.Dial(parseNetwork, parseAddr)
+				return net.DialTimeout(parseNetwork, parseAddr, parseDefaultBackendDialTimeout)
 			},
 		},
 		ErrorHandler: func(parseW http.ResponseWriter, parseR2 *http.Request, parseErr error) {
 			parseH.logger.Printf("Proxy error: %v", parseErr)
-			http.Error(parseW, parseErr.Error(), http.StatusBadGateway)
+			http.Error(parseW, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
 		},
 	}
+	parseH.serveH2CHandle = h2c.NewHandler(parseH.proxy, parseH.http2Server)
 
 	return parseH
 }
 
 // ServeHTTP implements http.Handler. This is called for each incoming HTTP request.
 func (parseH *Handler) ServeHTTP(parseW http.ResponseWriter, parseR *http.Request) {
+	if parseH.initErr != nil {
+		parseH.logger.Printf("Bridge request rejected due to configuration error: %v", parseH.initErr)
+		http.Error(parseW, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
 	// Upgrade to WebSocket
 	parseWs, parseErr := parseH.upgrader.Upgrade(parseW, parseR, nil)
 	if parseErr != nil {
@@ -145,8 +171,45 @@ func (parseH *Handler) ServeHTTP(parseW http.ResponseWriter, parseR *http.Reques
 	defer parseConn.Close()
 
 	// Serve HTTP/2 over the WebSocket connection
-	parseHttp2Server := &http2.Server{}
-	parseHttp2Server.ServeConn(parseConn, &http2.ServeConnOpts{
-		Handler: h2c.NewHandler(parseH.proxy, parseHttp2Server),
+	parseHTTP2Server := parseH.http2Server
+	parseServeH2CHandle := parseH.serveH2CHandle
+	if parseHTTP2Server == nil {
+		parseHTTP2Server = &http2.Server{}
+		parseServeH2CHandle = h2c.NewHandler(parseH.proxy, parseHTTP2Server)
+	}
+	parseHTTP2Server.ServeConn(parseConn, &http2.ServeConnOpts{
+		Handler: parseServeH2CHandle,
 	})
+}
+
+// parseProxyTargetURL validates the backend target and returns an HTTP URL.
+func parseProxyTargetURL(parseTargetAddress string) (*url.URL, error) {
+	if parseTargetAddress == "" {
+		return nil, fmt.Errorf("helpers: target address is required")
+	}
+
+	parseTargetURL, parseErr := url.Parse("http://" + parseTargetAddress)
+	if parseErr != nil {
+		return nil, fmt.Errorf("helpers: invalid target address %q: %w", parseTargetAddress, parseErr)
+	}
+	if parseTargetURL.Host == "" {
+		return nil, fmt.Errorf("helpers: invalid target address %q", parseTargetAddress)
+	}
+	return parseTargetURL, nil
+}
+
+// shouldWarnProxyPlaintextBackend reports whether plaintext backend transport should emit a warning.
+func shouldWarnProxyPlaintextBackend(parseHost string) bool {
+	parseHost = strings.TrimSpace(parseHost)
+	if parseHost == "" {
+		return true
+	}
+	if strings.EqualFold(parseHost, "localhost") {
+		return false
+	}
+	parseIP := net.ParseIP(parseHost)
+	if parseIP != nil {
+		return !parseIP.IsLoopback()
+	}
+	return true
 }

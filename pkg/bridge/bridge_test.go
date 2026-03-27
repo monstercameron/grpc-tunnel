@@ -2,11 +2,13 @@ package bridge
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestNewHandler_Defaults verifies that NewHandler sets proper default values
@@ -21,8 +23,11 @@ func TestNewHandler_Defaults(parseT *testing.T) {
 	if parseH.config.WriteBufferSize != 4096 {
 		parseT.Errorf("Expected WriteBufferSize 4096, got %d", parseH.config.WriteBufferSize)
 	}
-	if parseH.config.CheckOrigin == nil {
-		parseT.Error("Expected CheckOrigin to be set to default")
+	if parseH.config.CheckOrigin != nil {
+		parseT.Error("Expected CheckOrigin to use websocket default policy when nil")
+	}
+	if parseH.config.BackendDialTimeout != parseDefaultBackendDialTimeout {
+		parseT.Errorf("Expected BackendDialTimeout %s, got %s", parseDefaultBackendDialTimeout, parseH.config.BackendDialTimeout)
 	}
 	if parseH.logger == nil {
 		parseT.Error("Expected logger to be set")
@@ -35,11 +40,12 @@ func TestNewHandler_CustomConfig(parseT *testing.T) {
 	parseCustomLogger := &testLogger{}
 
 	parseH := NewHandler(Config{
-		TargetAddress:   "localhost:9999",
-		ReadBufferSize:  8192,
-		WriteBufferSize: 16384,
-		CheckOrigin:     parseCustomOrigin,
-		Logger:          parseCustomLogger,
+		TargetAddress:      "localhost:9999",
+		ReadBufferSize:     8192,
+		WriteBufferSize:    16384,
+		BackendDialTimeout: 2 * time.Second,
+		CheckOrigin:        parseCustomOrigin,
+		Logger:             parseCustomLogger,
 		OnConnect: func(parseR2 *http.Request) {
 			// Connect callback
 		},
@@ -54,6 +60,9 @@ func TestNewHandler_CustomConfig(parseT *testing.T) {
 	if parseH.config.WriteBufferSize != 16384 {
 		parseT.Errorf("Expected WriteBufferSize 16384, got %d", parseH.config.WriteBufferSize)
 	}
+	if parseH.config.BackendDialTimeout != 2*time.Second {
+		parseT.Errorf("Expected BackendDialTimeout 2s, got %s", parseH.config.BackendDialTimeout)
+	}
 	if parseH.logger != parseCustomLogger {
 		parseT.Error("Expected custom logger to be used")
 	}
@@ -61,6 +70,169 @@ func TestNewHandler_CustomConfig(parseT *testing.T) {
 	// Verify callbacks are stored (can't test execution without WebSocket upgrade)
 	if parseH.config.OnConnect == nil || parseH.config.OnDisconnect == nil {
 		parseT.Error("Expected callbacks to be stored")
+	}
+}
+
+// TestNewHandler_InvalidTargetGuard verifies invalid target config returns HTTP errors instead of panicking.
+func TestNewHandler_InvalidTargetGuard(parseT *testing.T) {
+	parseLogger := &testLogger{}
+	parseH := NewHandler(Config{
+		TargetAddress: "%",
+		Logger:        parseLogger,
+	})
+	if parseH.initErr == nil {
+		parseT.Fatal("Expected handler initialization error for invalid target")
+	}
+
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+
+	if parseW.Code != http.StatusInternalServerError {
+		parseT.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, parseW.Code)
+	}
+	if !strings.Contains(parseW.Body.String(), "invalid target address") {
+		parseT.Fatalf("Expected invalid target response body, got %q", parseW.Body.String())
+	}
+
+	isFoundConfigWarning := false
+	isFoundRequestReject := false
+	for _, parseMsg := range parseLogger.messages {
+		if strings.Contains(parseMsg, "Bridge configuration warning") {
+			isFoundConfigWarning = true
+		}
+		if strings.Contains(parseMsg, "Bridge request rejected due to configuration error") {
+			isFoundRequestReject = true
+		}
+	}
+	if !isFoundConfigWarning {
+		parseT.Fatal("Expected config warning log for invalid target address")
+	}
+	if !isFoundRequestReject {
+		parseT.Fatal("Expected request rejection log for invalid target address")
+	}
+}
+
+// TestNewHandler_NegativeBackendDialTimeoutGuard verifies invalid backend dial timeout config is rejected.
+func TestNewHandler_NegativeBackendDialTimeoutGuard(parseT *testing.T) {
+	parseLogger := &testLogger{}
+	parseH := NewHandler(Config{
+		TargetAddress:      "localhost:50051",
+		BackendDialTimeout: -time.Second,
+		Logger:             parseLogger,
+	})
+	if parseH.initErr == nil {
+		parseT.Fatal("Expected handler initialization error for negative BackendDialTimeout")
+	}
+
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+
+	if parseW.Code != http.StatusInternalServerError {
+		parseT.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, parseW.Code)
+	}
+	if !strings.Contains(parseW.Body.String(), "BackendDialTimeout must be >= 0") {
+		parseT.Fatalf("Expected BackendDialTimeout response body, got %q", parseW.Body.String())
+	}
+
+	isFoundConfigWarning := false
+	isFoundRequestReject := false
+	for _, parseMsg := range parseLogger.messages {
+		if strings.Contains(parseMsg, "Bridge configuration warning") {
+			isFoundConfigWarning = true
+		}
+		if strings.Contains(parseMsg, "Bridge request rejected due to configuration error") {
+			isFoundRequestReject = true
+		}
+	}
+	if !isFoundConfigWarning {
+		parseT.Fatal("Expected config warning log for negative BackendDialTimeout")
+	}
+	if !isFoundRequestReject {
+		parseT.Fatal("Expected request rejection log for negative BackendDialTimeout")
+	}
+}
+
+// TestNewHandler_NegativeReadBufferSizeGuard verifies invalid read buffer config is rejected.
+func TestNewHandler_NegativeReadBufferSizeGuard(parseT *testing.T) {
+	parseLogger := &testLogger{}
+	parseH := NewHandler(Config{
+		TargetAddress:  "localhost:50051",
+		ReadBufferSize: -1,
+		Logger:         parseLogger,
+	})
+	if parseH.initErr == nil {
+		parseT.Fatal("Expected handler initialization error for negative ReadBufferSize")
+	}
+
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+
+	if parseW.Code != http.StatusInternalServerError {
+		parseT.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, parseW.Code)
+	}
+	if !strings.Contains(parseW.Body.String(), "ReadBufferSize must be >= 0") {
+		parseT.Fatalf("Expected ReadBufferSize response body, got %q", parseW.Body.String())
+	}
+
+	isFoundConfigWarning := false
+	isFoundRequestReject := false
+	for _, parseMsg := range parseLogger.messages {
+		if strings.Contains(parseMsg, "Bridge configuration warning") {
+			isFoundConfigWarning = true
+		}
+		if strings.Contains(parseMsg, "Bridge request rejected due to configuration error") {
+			isFoundRequestReject = true
+		}
+	}
+	if !isFoundConfigWarning {
+		parseT.Fatal("Expected config warning log for negative ReadBufferSize")
+	}
+	if !isFoundRequestReject {
+		parseT.Fatal("Expected request rejection log for negative ReadBufferSize")
+	}
+}
+
+// TestNewHandler_NegativeWriteBufferSizeGuard verifies invalid write buffer config is rejected.
+func TestNewHandler_NegativeWriteBufferSizeGuard(parseT *testing.T) {
+	parseLogger := &testLogger{}
+	parseH := NewHandler(Config{
+		TargetAddress:   "localhost:50051",
+		WriteBufferSize: -1,
+		Logger:          parseLogger,
+	})
+	if parseH.initErr == nil {
+		parseT.Fatal("Expected handler initialization error for negative WriteBufferSize")
+	}
+
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+
+	if parseW.Code != http.StatusInternalServerError {
+		parseT.Fatalf("Expected status %d, got %d", http.StatusInternalServerError, parseW.Code)
+	}
+	if !strings.Contains(parseW.Body.String(), "WriteBufferSize must be >= 0") {
+		parseT.Fatalf("Expected WriteBufferSize response body, got %q", parseW.Body.String())
+	}
+
+	isFoundConfigWarning := false
+	isFoundRequestReject := false
+	for _, parseMsg := range parseLogger.messages {
+		if strings.Contains(parseMsg, "Bridge configuration warning") {
+			isFoundConfigWarning = true
+		}
+		if strings.Contains(parseMsg, "Bridge request rejected due to configuration error") {
+			isFoundRequestReject = true
+		}
+	}
+	if !isFoundConfigWarning {
+		parseT.Fatal("Expected config warning log for negative WriteBufferSize")
+	}
+	if !isFoundRequestReject {
+		parseT.Fatal("Expected request rejection log for negative WriteBufferSize")
 	}
 }
 
@@ -164,7 +336,7 @@ type testLogger struct {
 
 func (parseL *testLogger) Printf(format string, parseV ...interface{}) {
 	// Store messages for testing
-	parseL.messages = append(parseL.messages, format)
+	parseL.messages = append(parseL.messages, fmt.Sprintf(format, parseV...))
 }
 
 // TestCustomLogger verifies that custom logger is used
@@ -222,28 +394,26 @@ func TestNewHandler_ProxyConfiguration(parseT *testing.T) {
 	}
 }
 
-// TestDefaultCheckOrigin verifies that default CheckOrigin allows all origins
+// TestDefaultCheckOrigin verifies that default CheckOrigin uses websocket same-origin behavior.
 func TestDefaultCheckOrigin(parseT *testing.T) {
 	parseH := NewHandler(Config{
 		TargetAddress: "localhost:50051",
-		// No CheckOrigin specified - should default to allow all
 	})
 
-	parseTestCases := []string{
-		"https://example.com",
-		"http://localhost:3000",
-		"https://untrusted.com",
-		"",
+	if parseH.config.CheckOrigin != nil {
+		parseT.Fatal("Expected nil CheckOrigin so websocket default same-origin checks apply")
 	}
 
-	for _, parseOrigin := range parseTestCases {
-		parseReq := httptest.NewRequest("GET", "/", nil)
-		if parseOrigin != "" {
-			parseReq.Header.Set("Origin", parseOrigin)
-		}
+	parseReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	parseReq.Header.Set("Connection", "Upgrade")
+	parseReq.Header.Set("Upgrade", "websocket")
+	parseReq.Header.Set("Sec-WebSocket-Version", "13")
+	parseReq.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	parseReq.Header.Set("Origin", "https://untrusted.example")
 
-		if !parseH.config.CheckOrigin(parseReq) {
-			parseT.Errorf("Default CheckOrigin should allow all origins, rejected: %s", parseOrigin)
-		}
+	parseW := httptest.NewRecorder()
+	parseH.ServeHTTP(parseW, parseReq)
+	if parseW.Code == http.StatusSwitchingProtocols {
+		parseT.Fatal("Expected websocket default same-origin check to reject cross-origin upgrade")
 	}
 }

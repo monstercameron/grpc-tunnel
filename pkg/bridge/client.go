@@ -4,11 +4,31 @@ package bridge
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
+	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/grpc"
 )
+
+// ClientConfig configures low-level websocket dialing behavior.
+type ClientConfig struct {
+	// Headers configures optional HTTP headers for the websocket handshake.
+	Headers http.Header
+	// Subprotocols configures optional websocket subprotocol negotiation.
+	Subprotocols []string
+	// Proxy configures an optional proxy selector.
+	Proxy func(*http.Request) (*url.URL, error)
+	// HandshakeTimeout limits websocket handshake duration.
+	HandshakeTimeout time.Duration
+	// TLSConfig configures TLS behavior for secure websocket dialing.
+	TLSConfig *tls.Config
+	// ShouldEnableCompression enables websocket per-message compression where supported.
+	ShouldEnableCompression bool
+}
 
 // DialOption creates a gRPC dial option that connects via WebSocket.
 // Use this on the client side to establish gRPC connections over WebSocket.
@@ -42,11 +62,30 @@ import (
 // Note: The target address parameter in grpc.Dial() is ignored when using this
 // DialOption - the connection is made to the WebSocket URL instead.
 func DialOption(parseWebsocketURL string) grpc.DialOption {
+	return DialOptionWithConfig(parseWebsocketURL, ClientConfig{})
+}
+
+// DialOptionWithConfig creates a websocket gRPC dial option with additive client settings.
+func DialOptionWithConfig(parseWebsocketURL string, parseConfig ClientConfig) grpc.DialOption {
+	parseDialer := websocket.Dialer{
+		TLSClientConfig:   parseConfig.TLSConfig,
+		Subprotocols:      append([]string{}, parseConfig.Subprotocols...),
+		Proxy:             parseConfig.Proxy,
+		HandshakeTimeout:  parseConfig.HandshakeTimeout,
+		WriteBufferPool:   buildWebSocketWriteBufferPool(parseDefaultWebSocketBufferSize),
+		EnableCompression: parseConfig.ShouldEnableCompression,
+	}
+	parseHeadersTemplate := http.Header(nil)
+	if parseConfig.Headers != nil {
+		parseHeadersTemplate = parseConfig.Headers.Clone()
+	}
+
 	return grpc.WithContextDialer(func(parseCtx context.Context, parseGrpcTargetAddress string) (net.Conn, error) {
 		// Dial the WebSocket connection using the provided URL.
 		// The grpcTargetAddress parameter (from grpc.Dial) is ignored because the WebSocket
 		// URL contains the complete target address.
-		parseWebsocketConnection, _, parseErr := websocket.DefaultDialer.DialContext(parseCtx, parseWebsocketURL, nil)
+		parseDialerCopy := parseDialer
+		parseWebsocketConnection, _, parseErr := parseDialerCopy.DialContext(parseCtx, parseWebsocketURL, parseHeadersTemplate)
 		if parseErr != nil {
 			// WebSocket connection failed (network error, DNS resolution, etc.)
 			return nil, parseErr

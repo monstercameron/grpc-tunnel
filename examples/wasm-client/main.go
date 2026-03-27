@@ -7,26 +7,22 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/monstercameron/GoGRPCBridge/examples/_shared/proto"
-	"github.com/monstercameron/GoGRPCBridge/pkg/wasm/dialer"
+	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 )
 
 func main() {
 	log.Println("WASM: Starting new gRPC client...")
+	const parseBridgeWebSocketURL = "ws://127.0.0.1:5000/"
 
 	// Establish a gRPC connection via the WebSocket tunnel
 	parseDialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	parseGrpcConnection, parseDialError := grpc.DialContext(
-		parseDialContext,
-		"localhost:5000", // Target will be ignored, dialer handles connection
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		dialer.New("ws://localhost:5000/"), // Use our custom WASM dialer
-	)
+	parseGrpcConnection, parseDialError := grpctunnel.BuildTunnelConn(parseDialContext, grpctunnel.TunnelConfig{
+		Target:      parseBridgeWebSocketURL,
+		GRPCOptions: grpctunnel.ApplyTunnelInsecureCredentials(nil),
+	})
 	if parseDialError != nil {
 		log.Fatalf("WASM: Failed to connect to gRPC server via WebSocket: %v", parseDialError)
 	}

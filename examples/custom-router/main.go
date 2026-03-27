@@ -1,4 +1,5 @@
-// Custom router example - integrate bridge with existing HTTP server
+// Custom router example - compatibility wiring for existing HTTP servers.
+// For new integrations, prefer the typed pkg/grpctunnel API surface.
 package main
 
 import (

@@ -27,6 +27,7 @@ examples/_shared/public/*.wasm
 # Runtime data
 examples/_shared/data/
 *.json
+!benchmarks/quality_baseline.json
 !go.json
 !go.sum
 !package.json

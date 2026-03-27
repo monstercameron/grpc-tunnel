@@ -1,10 +1,11 @@
 //go:build !js && !wasm
 
+//lint:file-ignore SA1019 grpc.DialContext and WithBlock are retained in tests to validate blocking dial behavior on grpc 1.x.
+
 package bridge
 
 import (
 	"context"
-	"net"
 	"testing"
 	"time"
 
@@ -161,15 +162,6 @@ func TestDialOption_WithOtherOptions(parseT *testing.T) {
 	if parseErr == nil {
 		parseT.Error("expected connection error")
 	}
-}
-
-// mockDialer is a test helper for testing dialer behavior
-type mockDialer struct {
-	dialFunc func(context.Context, string) (net.Conn, error)
-}
-
-func (parseM *mockDialer) Dial(parseCtx context.Context, parseAddr string) (net.Conn, error) {
-	return parseM.dialFunc(parseCtx, parseAddr)
 }
 
 // TestDialOption_DialerBehavior tests the actual dialer function

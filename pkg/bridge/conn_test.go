@@ -198,8 +198,8 @@ func TestWebSocketConn_Deadlines(parseT *testing.T) {
 
 	// Test SetDeadline
 	parseErr := parseConn.SetDeadline(parseFuture)
-	if parseErr != nil {
-		parseT.Errorf("SetDeadline() unexpected error: %v", parseErr)
+	if parseErr == nil {
+		parseT.Error("SetDeadline() expected error for nil websocket, got nil")
 	}
 	if !parseConn.readDeadline.Equal(parseFuture) || !parseConn.writeDeadline.Equal(parseFuture) {
 		parseT.Error("SetDeadline() did not set both deadlines")
@@ -208,8 +208,8 @@ func TestWebSocketConn_Deadlines(parseT *testing.T) {
 	// Test SetReadDeadline
 	parseFuture2 := parseNow.Add(2 * time.Second)
 	parseErr = parseConn.SetReadDeadline(parseFuture2)
-	if parseErr != nil {
-		parseT.Errorf("SetReadDeadline() unexpected error: %v", parseErr)
+	if parseErr == nil {
+		parseT.Error("SetReadDeadline() expected error for nil websocket, got nil")
 	}
 	if !parseConn.readDeadline.Equal(parseFuture2) {
 		parseT.Error("SetReadDeadline() did not set read deadline")
@@ -218,8 +218,8 @@ func TestWebSocketConn_Deadlines(parseT *testing.T) {
 	// Test SetWriteDeadline
 	parseFuture3 := parseNow.Add(3 * time.Second)
 	parseErr = parseConn.SetWriteDeadline(parseFuture3)
-	if parseErr != nil {
-		parseT.Errorf("SetWriteDeadline() unexpected error: %v", parseErr)
+	if parseErr == nil {
+		parseT.Error("SetWriteDeadline() expected error for nil websocket, got nil")
 	}
 	if !parseConn.writeDeadline.Equal(parseFuture3) {
 		parseT.Error("SetWriteDeadline() did not set write deadline")
@@ -264,6 +264,21 @@ func TestNewWebSocketConn(parseT *testing.T) {
 	parseConn := NewWebSocketConn(parseWs)
 	if parseConn == nil {
 		parseT.Error("NewWebSocketConn returned nil")
+	}
+}
+
+// TestNewWebSocketConn_NilConnectionGuards verifies nil websocket adapters fail safely without panicking.
+func TestNewWebSocketConn_NilConnectionGuards(parseT *testing.T) {
+	parseNetworkConn := NewWebSocketConn(nil)
+
+	if _, parseErr := parseNetworkConn.Read(make([]byte, 1)); parseErr == nil {
+		parseT.Fatal("Read() expected error for nil websocket, got nil")
+	}
+	if _, parseErr := parseNetworkConn.Write([]byte("x")); parseErr == nil {
+		parseT.Fatal("Write() expected error for nil websocket, got nil")
+	}
+	if parseErr := parseNetworkConn.Close(); parseErr != nil {
+		parseT.Fatalf("Close() error = %v, want nil", parseErr)
 	}
 }
 

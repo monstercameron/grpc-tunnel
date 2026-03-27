@@ -11,10 +11,10 @@ cd GoGRPCBridge
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 # Run tests
-make test
+go run ./tools/runner.go test
 
 # Make changes, then run pre-commit check
-make check
+go run ./tools/runner.go check
 ```
 
 ## Pre-Commit Workflow
@@ -27,44 +27,44 @@ The repository has **strict pre-commit hooks** that will **block commits** if:
 
 ```bash
 # Run all pre-commit checks (format + lint + tests)
-make check
+go run ./tools/runner.go check
 
 # Format code
-make fmt
+go run ./tools/runner.go fmt
 
 # Run linter
-make lint
+go run ./tools/runner.go lint
 
 # Auto-fix lint issues (when possible)
-make lint-fix
+go run ./tools/runner.go lint-fix
 
 # Run tests
-make test
+go run ./tools/runner.go test
 
 # Quick tests (no race detector)
-make test-short
+go run ./tools/runner.go test-short
 ```
 
 ## Testing
 
 ```bash
 # Unit tests with race detector and coverage
-make test
+go run ./tools/runner.go test
 
 # Quick tests
-make test-short
+go run ./tools/runner.go test-short
 
 # Fuzz tests (1 minute each)
-make fuzz
+go run ./tools/runner.go fuzz
 
 # Quick fuzz validation (5 seconds each) - same as CI
-make fuzz-quick
+go run ./tools/runner.go fuzz-quick
 
 # Run specific fuzz test
 go test ./pkg/bridge -v -fuzz=FuzzWebSocketConnWrite -fuzztime=60s
 
 # E2E tests (requires Playwright)
-make e2e
+go run ./tools/runner.go e2e
 
 # Run specific test
 go test ./pkg/bridge -v -run TestWebSocketConn
@@ -77,8 +77,8 @@ go test ./pkg/bridge -v -run TestWebSocketConn
 This will fail with: `testing: will not fuzz, -fuzz matches more than one fuzz test`
 
 **✅ Instead use:**
-- `make fuzz` - Runs each fuzzer individually for 1 minute
-- `make fuzz-quick` - Quick validation (5s each, same as CI)
+- `go run ./tools/runner.go fuzz` - Runs each fuzzer individually for 1 minute
+- `go run ./tools/runner.go fuzz-quick` - Quick validation (5s each, same as CI)
 - Individual fuzzer: `go test ./pkg/bridge -fuzz=FuzzWebSocketConnWrite -fuzztime=60s`
 
 The `-fuzz` flag must match exactly ONE fuzz function.
@@ -101,22 +101,26 @@ When you push to `main`, GitHub Actions runs:
 - Creates GitHub release with binaries
 - No release if tests fail
 
-## Makefile Targets
+## Runner Commands
 
 ```bash
-make help          # Show all available commands
-make test          # Run tests with coverage
-make test-short    # Quick tests without race detector
-make fmt           # Format all code
-make lint          # Run linter
-make lint-fix      # Auto-fix lint issues
-make check         # Format + lint + tests (pre-commit)
-make pre-commit    # Same as check
-make fuzz          # Run fuzz tests (1 min each)
-make e2e           # Run end-to-end tests
-make build         # Build example binaries
-make clean         # Clean caches and artifacts
+go run ./tools/runner.go help          # Show all available commands
+go run ./tools/runner.go test          # Run tests with coverage
+go run ./tools/runner.go test-short    # Quick tests without race detector
+go run ./tools/runner.go fmt           # Format all code
+go run ./tools/runner.go lint          # Run linter
+go run ./tools/runner.go lint-fix      # Auto-fix lint issues
+go run ./tools/runner.go check         # Format + lint + tests (pre-commit)
+go run ./tools/runner.go pre-commit    # Same as check
+go run ./tools/runner.go fuzz          # Run fuzz tests (1 min each)
+go run ./tools/runner.go e2e           # Run end-to-end tests
+go run ./tools/runner.go build         # Build example binaries
+go run ./tools/runner.go quality       # Run lint + tests + coverage + benchmark gates
+go run ./tools/runner.go quality-baseline # Store benchmark baseline snapshot
+go run ./tools/runner.go clean         # Clean caches and artifacts
 ```
+
+`make <target>` remains available as a compatibility wrapper.
 
 ## Common Issues
 
@@ -131,7 +135,7 @@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```bash
 chmod +x .git/hooks/pre-commit
 # Or
-make install-hooks
+go run ./tools/runner.go install-hooks
 ```
 
 ### Tests fail with "playwright not found"
@@ -210,9 +214,10 @@ As of now, there are only **4 low-severity issues** (all in auto-generated proto
 
 ## Pull Request Checklist
 
-- [ ] Code is formatted (`make fmt`)
-- [ ] Linting passes (`make lint`)
-- [ ] All tests pass (`make test`)
+- [ ] Code is formatted (`go run ./tools/runner.go fmt`)
+- [ ] Linting passes (`go run ./tools/runner.go lint`)
+- [ ] All tests pass (`go run ./tools/runner.go test`)
 - [ ] Added tests for new features
 - [ ] Updated README if needed
 - [ ] No security issues from Gosec
+
