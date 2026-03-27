@@ -1,0 +1,182 @@
+﻿[
+    {
+        "path":  "ADOPTION_METRICS.md",
+        "title":  "Adoption Metrics",
+        "section":  "Core"
+    },
+    {
+        "path":  "API_COMPATIBILITY.md",
+        "title":  "Api Compatibility",
+        "section":  "Core"
+    },
+    {
+        "path":  "AUTH_PROPAGATION_BOUNDARIES.md",
+        "title":  "Auth Propagation Boundaries",
+        "section":  "Core"
+    },
+    {
+        "path":  "BACKLOG_FEEDBACK_LOOP.md",
+        "title":  "Backlog Feedback Loop",
+        "section":  "Core"
+    },
+    {
+        "path":  "benchmarks/README.md",
+        "title":  "Benchmarks README",
+        "section":  "Benchmarks"
+    },
+    {
+        "path":  "CANARY_AND_SMOKE.md",
+        "title":  "Canary And Smoke",
+        "section":  "Core"
+    },
+    {
+        "path":  "CHANGELOG.md",
+        "title":  "Changelog",
+        "section":  "Core"
+    },
+    {
+        "path":  "CODEX_LOGGING_OTEL_TODO.md",
+        "title":  "Codex Logging Otel Todo",
+        "section":  "Internal"
+    },
+    {
+        "path":  "CODEX_SECURITY_TODO.md",
+        "title":  "Codex Security Todo",
+        "section":  "Internal"
+    },
+    {
+        "path":  "COMMUNITY_WORKFLOW.md",
+        "title":  "Community Workflow",
+        "section":  "Core"
+    },
+    {
+        "path":  "CONTRIBUTING.md",
+        "title":  "Contributing",
+        "section":  "Core"
+    },
+    {
+        "path":  "DOCS_FRESHNESS_POLICY.md",
+        "title":  "Docs Freshness Policy",
+        "section":  "Core"
+    },
+    {
+        "path":  "DOCS_INDEX.md",
+        "title":  "Docs Index",
+        "section":  "Core"
+    },
+    {
+        "path":  "examples/external-consumer/README.md",
+        "title":  "External Consumer README",
+        "section":  "Examples"
+    },
+    {
+        "path":  "examples/README.md",
+        "title":  "Examples README",
+        "section":  "Examples"
+    },
+    {
+        "path":  "MAINTENANCE_SCHEDULE.md",
+        "title":  "Maintenance Schedule",
+        "section":  "Core"
+    },
+    {
+        "path":  "MIGRATION.md",
+        "title":  "Migration",
+        "section":  "Core"
+    },
+    {
+        "path":  "observability/DASHBOARD_QUERIES.md",
+        "title":  "Dashboard Queries",
+        "section":  "Observability"
+    },
+    {
+        "path":  "OBSERVABILITY_CONTRACT.md",
+        "title":  "Observability Contract",
+        "section":  "Core"
+    },
+    {
+        "path":  "OPERATIONS_RUNBOOK.md",
+        "title":  "Operations Runbook",
+        "section":  "Core"
+    },
+    {
+        "path":  "PERFORMANCE.md",
+        "title":  "Performance",
+        "section":  "Core"
+    },
+    {
+        "path":  "PERFORMANCE_OPTIMIZATION_NOTES.md",
+        "title":  "Performance Optimization Notes",
+        "section":  "Core"
+    },
+    {
+        "path":  "PROFESSIONAL_RUBRIC.md",
+        "title":  "Professional Rubric",
+        "section":  "Internal"
+    },
+    {
+        "path":  "QUALITY_GATES.md",
+        "title":  "Quality Gates",
+        "section":  "Core"
+    },
+    {
+        "path":  "README.md",
+        "title":  "Readme",
+        "section":  "Core"
+    },
+    {
+        "path":  "RELEASE_CHECKLIST.md",
+        "title":  "Release Checklist",
+        "section":  "Core"
+    },
+    {
+        "path":  "RELEASE_PERFORMANCE_TEMPLATE.md",
+        "title":  "Release Performance Template",
+        "section":  "Core"
+    },
+    {
+        "path":  "ROADMAP_TO_10S.md",
+        "title":  "Roadmap To 10S",
+        "section":  "Core"
+    },
+    {
+        "path":  "ROLLBACK_AND_HOTFIX.md",
+        "title":  "Rollback And Hotfix",
+        "section":  "Core"
+    },
+    {
+        "path":  "SECURITY_FUZZ_PROCESS.md",
+        "title":  "Security Fuzz Process",
+        "section":  "Core"
+    },
+    {
+        "path":  "SECURITY_RELEASE_CHECKLIST.md",
+        "title":  "Security Release Checklist",
+        "section":  "Core"
+    },
+    {
+        "path":  "SLO_POLICY.md",
+        "title":  "Slo Policy",
+        "section":  "Core"
+    },
+    {
+        "path":  "THREAT_MODEL.md",
+        "title":  "Threat Model",
+        "section":  "Core"
+    },
+    {
+        "path":  "TRIAGE_SLA.md",
+        "title":  "Triage Sla",
+        "section":  "Core"
+    },
+    {
+        "path":  "TROUBLESHOOTING.md",
+        "title":  "Troubleshooting",
+        "section":  "Core"
+    },
+    {
+        "path":  "TUNNEL_STATE_DIAGNOSTICS.md",
+        "title":  "Tunnel State Diagnostics",
+        "section":  "Core"
+    }
+]

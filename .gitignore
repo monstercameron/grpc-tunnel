@@ -28,6 +28,7 @@ examples/_shared/public/*.wasm
 examples/_shared/data/
 *.json
 !benchmarks/quality_baseline.json
+!docs/catalog.json
 !go.json
 !go.sum
 !package.json
